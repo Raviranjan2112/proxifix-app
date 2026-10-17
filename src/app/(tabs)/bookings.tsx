@@ -33,7 +33,7 @@ export default function BookingsScreen() {
   async function loadBookings() {
     setLoading(true);
     try {
-      const res = await api.get("/bookings/customer");
+      const res = await api.get("/bookings");
       if (res.data?.success) {
         setBookings(res.data.bookings || []);
       }

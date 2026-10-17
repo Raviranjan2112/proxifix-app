@@ -16,24 +16,26 @@ import { Ionicons } from "@expo/vector-icons";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 
-const CATEGORIES = [
-  { id: "all", name: "All", icon: "apps" },
-  { id: "Electrician", name: "Electrician", icon: "flash" },
-  { id: "Plumber", name: "Plumber", icon: "water" },
-  { id: "Appliance Repair", name: "Appliance", icon: "construct" },
-  { id: "Carpenter", name: "Carpenter", icon: "hammer" },
-  { id: "Painter", name: "Painter", icon: "color-palette" },
-  { id: "Cleaning", name: "Cleaning", icon: "sparkles" },
-  { id: "AC Repair", name: "AC Repair", icon: "snow" },
-];
+const RADIUS_OPTIONS = [5, 10, 15, 20];
 
-const RADIUS_OPTIONS = [5, 10, 15, 25, 50];
+function getCategoryIcon(name: string): any {
+  const lower = (name || "").toLowerCase();
+  if (lower.includes("electric")) return "flash";
+  if (lower.includes("plumb")) return "water";
+  if (lower.includes("ac") || lower.includes("air")) return "snow";
+  if (lower.includes("carpent")) return "hammer";
+  if (lower.includes("paint")) return "color-palette";
+  if (lower.includes("clean")) return "sparkles";
+  if (lower.includes("appliance")) return "construct";
+  return "construct";
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
 
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [services, setServices] = useState<any[]>([]);
+  const [selectedService, setSelectedService] = useState<string>("AC Repair");
   const [radius, setRadius] = useState(15);
   const [workers, setWorkers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,13 +45,27 @@ export default function HomeScreen() {
 
   useEffect(() => {
     requestDeviceLocation();
+    loadServices();
   }, []);
 
+  async function loadServices() {
+    try {
+      const res = await api.get("/services");
+      const list = res.data?.services || [];
+      if (list.length > 0) {
+        setServices(list);
+        setSelectedService((prev) => prev || list[0].name);
+      }
+    } catch (e) {
+      console.warn("Could not load dynamic services, using defaults:", e);
+    }
+  }
+
   useEffect(() => {
-    if (coords) {
+    if (coords && selectedService) {
       loadNearbyWorkers();
     }
-  }, [coords, selectedCategory, radius]);
+  }, [coords, selectedService, radius]);
 
   async function requestDeviceLocation() {
     try {
@@ -57,11 +73,11 @@ export default function HomeScreen() {
       if (status !== "granted") {
         Alert.alert(
           "Location Permission",
-          "Permission denied. Using default location (New Delhi)."
+          "Permission denied. Using default location (Bhopal)."
         );
-        const fallback = { latitude: 28.6139, longitude: 77.2090 };
+        const fallback = { latitude: 23.2599, longitude: 77.4126 };
         setCoords(fallback);
-        setLocationName("New Delhi, IN (Default)");
+        setLocationName("Bhopal, MP (Default)");
         return;
       }
 
@@ -90,9 +106,9 @@ export default function HomeScreen() {
       }
     } catch (err) {
       console.warn("Location error:", err);
-      const fallback = { latitude: 28.6139, longitude: 77.2090 };
+      const fallback = { latitude: 23.2599, longitude: 77.4126 };
       setCoords(fallback);
-      setLocationName("Default Location");
+      setLocationName("Bhopal, MP");
     }
   }
 
@@ -100,22 +116,21 @@ export default function HomeScreen() {
     if (!coords) return;
     setLoading(true);
     try {
+      const activeService = selectedService || (services[0]?.name ?? "AC Repair");
       const params: any = {
         latitude: coords.latitude,
         longitude: coords.longitude,
-        radius,
+        radius: Math.min(radius, 20),
+        service: activeService,
       };
-
-      if (selectedCategory !== "all") {
-        params.service = selectedCategory;
-      }
 
       const res = await api.get("/workers/nearby", { params });
       if (res.data?.success) {
         setWorkers(res.data.workers || []);
       }
-    } catch (err) {
-      console.error("Failed to load nearby workers:", err);
+    } catch (err: any) {
+      console.error("Failed to load nearby workers:", err?.response?.data?.message || err?.message || err);
+      setWorkers([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -181,16 +196,16 @@ export default function HomeScreen() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoryScroll}
       >
-        {CATEGORIES.map((cat) => {
-          const isActive = selectedCategory === cat.id;
+        {services.map((cat) => {
+          const isActive = selectedService.toLowerCase() === (cat.name || "").toLowerCase();
           return (
             <TouchableOpacity
-              key={cat.id}
+              key={cat.id || cat.name}
               style={[styles.categoryPill, isActive && styles.categoryPillActive]}
-              onPress={() => setSelectedCategory(cat.id)}
+              onPress={() => setSelectedService(cat.name)}
             >
               <Ionicons
-                name={cat.icon as any}
+                name={getCategoryIcon(cat.name)}
                 size={16}
                 color={isActive ? "#FFFFFF" : "#475569"}
               />
@@ -247,7 +262,7 @@ export default function HomeScreen() {
           <Ionicons name="search-outline" size={48} color="#94A3B8" />
           <Text style={styles.emptyTitle}>No workers found nearby</Text>
           <Text style={styles.emptySubtitle}>
-            Try expanding your search radius to 25 km or 50 km, or choose another service category.
+            Try expanding your search radius to 20 km or choose another service category.
           </Text>
         </View>
       ) : (
@@ -262,28 +277,24 @@ export default function HomeScreen() {
               <View style={styles.workerInfo}>
                 <View style={styles.nameRow}>
                   <Text style={styles.workerName}>{worker.name}</Text>
-                  {worker.verification_status === "APPROVED" && (
-                    <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-                  )}
+                  <Ionicons name="checkmark-circle" size={16} color="#10B981" />
                 </View>
                 <Text style={styles.workerMeta}>
-                  {worker.experience_years || 0} yrs exp • ⭐ {Number(worker.rating || 5.0).toFixed(1)}
+                  {worker.city || "Available now"} • ⭐ {Number(worker.rating || 5.0).toFixed(1)}
                 </Text>
               </View>
               <View style={styles.distanceBadge}>
                 <Text style={styles.distanceText}>
-                  {worker.distance_km ? `${Number(worker.distance_km).toFixed(1)} km` : "Nearby"}
+                  {worker.distanceKm ? `${Number(worker.distanceKm).toFixed(1)} km` : "Nearby"}
                 </Text>
               </View>
             </View>
 
             {/* Services badges */}
             <View style={styles.servicesRow}>
-              {(worker.services || []).map((srv: string, idx: number) => (
-                <View key={idx} style={styles.serviceChip}>
-                  <Text style={styles.serviceChipText}>{srv}</Text>
-                </View>
-              ))}
+              <View style={styles.serviceChip}>
+                <Text style={styles.serviceChipText}>{worker.service || selectedService}</Text>
+              </View>
             </View>
 
             {/* Bottom Row */}
@@ -291,7 +302,7 @@ export default function HomeScreen() {
               <View>
                 <Text style={styles.chargeLabel}>Starting Charge</Text>
                 <Text style={styles.chargeValue}>
-                  ₹{worker.minimum_charge || 250}
+                  ₹{worker.minimumCharge || worker.minimum_charge || 250}
                 </Text>
               </View>
 
@@ -308,7 +319,15 @@ export default function HomeScreen() {
                       ]
                     );
                   } else {
-                    router.push(`/book/${worker.user_id || worker.id}`);
+                    router.push({
+                      pathname: `/book/${worker.id || worker.user_id}`,
+                      params: {
+                        serviceCategoryId: worker.serviceCategoryId || worker.service_category_id,
+                        serviceName: worker.service || selectedService,
+                        workerName: worker.name,
+                        minCharge: worker.minimumCharge || worker.minimum_charge || 250,
+                      },
+                    });
                   }
                 }}
               >

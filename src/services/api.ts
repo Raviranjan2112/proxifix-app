@@ -2,8 +2,16 @@ import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 import { Platform, Alert } from "react-native";
 
-// Live Production Render Backend API URL
-export const API_BASE_URL = "https://proxifix-api.onrender.com/api";
+import Constants from "expo-constants";
+
+// Connect to ProxiFix API backend
+// In Expo Go, dynamically detect host computer's IP address (fallback to 192.168.1.7:4000)
+const debuggerHost =
+  Constants.expoConfig?.hostUri?.split(":")[0] ||
+  Constants.manifest2?.extra?.expoGo?.debuggerHost?.split(":")[0] ||
+  "192.168.1.7";
+
+export const API_BASE_URL = `http://${debuggerHost}:4000/api`;
 
 const api = axios.create({
   baseURL: API_BASE_URL,

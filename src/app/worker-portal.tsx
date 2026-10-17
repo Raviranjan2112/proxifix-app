@@ -34,12 +34,12 @@ export default function WorkerPortalScreen() {
     try {
       const [profRes, bookRes] = await Promise.all([
         api.get("/workers/me"),
-        api.get("/bookings/worker"),
+        api.get("/bookings"),
       ]);
 
       if (profRes.data?.success) {
         setProfile(profRes.data.worker);
-        setIsOnline(profRes.data.worker.online_status !== "OFFLINE");
+        setIsOnline(profRes.data.worker.online_status === true || profRes.data.worker.online_status === "ONLINE");
       }
 
       if (bookRes.data?.success) {
@@ -57,28 +57,32 @@ export default function WorkerPortalScreen() {
   const handleToggleOnline = async (value: boolean) => {
     setIsOnline(value);
     try {
-      const status = value ? "ONLINE" : "OFFLINE";
-      await api.put("/workers/me/availability", {
-        onlineStatus: status,
+      let currentLat: number | undefined;
+      let currentLon: number | undefined;
+
+      const { status: permStatus } = await Location.requestForegroundPermissionsAsync();
+      if (permStatus === "granted") {
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        currentLat = loc.coords.latitude;
+        currentLon = loc.coords.longitude;
+      }
+
+      await api.put("/workers/status", {
+        onlineStatus: value,
         availabilityStatus: value ? "AVAILABLE" : "OFFLINE",
+        ...(currentLat && currentLon ? { latitude: currentLat, longitude: currentLon } : {}),
       });
 
-      if (value) {
-        // Broadcast fresh GPS coordinates to PostGIS
-        const { status: permStatus } = await Location.requestForegroundPermissionsAsync();
-        if (permStatus === "granted") {
-          const loc = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
-          });
-          await api.post("/workers/location", {
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-            accuracyMeters: loc.coords.accuracy,
-          });
-        }
+      if (value && currentLat && currentLon) {
+        await api.put("/workers/location", {
+          latitude: currentLat,
+          longitude: currentLon,
+        });
       }
     } catch (err: any) {
-      Alert.alert("Status Error", "Failed to update availability status.");
+      Alert.alert("Status Error", err.response?.data?.message || "Failed to update availability status.");
       setIsOnline(!value);
     }
   };

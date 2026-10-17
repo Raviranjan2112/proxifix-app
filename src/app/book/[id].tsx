@@ -16,12 +16,18 @@ import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 
 export default function BookScreen() {
-  const { id } = useLocalSearchParams();
+  const params = useLocalSearchParams();
+  const id = params.id as string;
+  const serviceCategoryId = params.serviceCategoryId as string;
+  const serviceName = (params.serviceName as string) || "Home Service";
+  const workerName = (params.workerName as string) || "Professional";
+  const minCharge = (params.minCharge as string) || "250";
+
   const router = useRouter();
   const { user } = useAuth();
 
   const [description, setDescription] = useState("");
-  const [scheduledTime, setScheduledTime] = useState("Today, within 2 hours");
+  const [scheduledTime, setScheduledTime] = useState("");
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [address, setAddress] = useState("Acquiring current GPS location...");
   const [submitting, setSubmitting] = useState(false);
@@ -54,20 +60,20 @@ export default function BookScreen() {
             setAddress(`${c.latitude.toFixed(4)}°N, ${c.longitude.toFixed(4)}°E`);
           }
         } else {
-          setCoords({ latitude: 28.6139, longitude: 77.2090 });
-          setAddress("New Delhi, IN (Default Location)");
+          setCoords({ latitude: 23.2599, longitude: 77.4126 });
+          setAddress("Bhopal, Madhya Pradesh");
         }
       } catch {
-        setCoords({ latitude: 28.6139, longitude: 77.2090 });
-        setAddress("Default Location");
+        setCoords({ latitude: 23.2599, longitude: 77.4126 });
+        setAddress("Bhopal, Madhya Pradesh");
       }
     }
     getLocation();
   }, []);
 
   const handleCreateBooking = async () => {
-    if (!description.trim()) {
-      Alert.alert("Job Details", "Please briefly explain the issue or service required.");
+    if (description.trim().length < 10) {
+      Alert.alert("Job Details", "Please provide at least 10 characters explaining the service issue.");
       return;
     }
 
@@ -78,14 +84,30 @@ export default function BookScreen() {
 
     setSubmitting(true);
     try {
-      const res = await api.post("/bookings", {
+      // If serviceCategoryId is missing, resolve it from services list
+      let categoryId = serviceCategoryId;
+      if (!categoryId) {
+        const sRes = await api.get("/services");
+        const found = (sRes.data?.services || []).find((s: any) =>
+          s.name.toLowerCase() === serviceName.toLowerCase()
+        );
+        categoryId = found ? found.id : sRes.data?.services?.[0]?.id;
+      }
+
+      const payload: any = {
         workerId: id,
-        description: description.trim(),
-        scheduledTime,
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        address,
-      });
+        serviceCategoryId: categoryId,
+        serviceDescription: description.trim(),
+        customerAddress: address.length >= 5 ? address : "Bhopal, Madhya Pradesh",
+        customerLatitude: coords.latitude,
+        customerLongitude: coords.longitude,
+      };
+
+      if (scheduledTime.trim()) {
+        payload.scheduledTime = new Date().toISOString();
+      }
+
+      const res = await api.post("/bookings", payload);
 
       if (res.data?.success) {
         Alert.alert(
