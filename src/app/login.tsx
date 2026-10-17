@@ -33,9 +33,14 @@ export default function LoginScreen() {
     const res = await login(email, password);
     setSubmitting(false);
 
-    if (res.success) {
-      Alert.alert("Success", "Welcome back to ProxiFix!");
-      router.replace("/(tabs)");
+    if (res.success && res.user) {
+      if (res.user.role === "ADMIN") {
+        router.replace("/admin-portal");
+      } else if (res.user.role === "WORKER") {
+        router.replace("/worker-portal");
+      } else {
+        router.replace("/(tabs)");
+      }
     } else {
       Alert.alert("Login Failed", res.message || "Invalid email or password.");
     }

@@ -37,12 +37,6 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
-          name="worker/[id]"
-          options={{
-            title: "Worker Profile",
-          }}
-        />
-        <Stack.Screen
           name="book/[id]"
           options={{
             title: "Book Service",

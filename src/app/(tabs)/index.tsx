@@ -62,10 +62,13 @@ export default function HomeScreen() {
   }
 
   useEffect(() => {
-    if (coords && selectedService) {
+    if (coords && selectedService && user) {
       loadNearbyWorkers();
+    } else if (!user) {
+      setWorkers([]);
+      setLoading(false);
     }
-  }, [coords, selectedService, radius]);
+  }, [coords, selectedService, radius, user]);
 
   async function requestDeviceLocation() {
     try {
@@ -113,6 +116,11 @@ export default function HomeScreen() {
   }
 
   async function loadNearbyWorkers() {
+    if (!user) {
+      setWorkers([]);
+      setLoading(false);
+      return;
+    }
     if (!coords) return;
     setLoading(true);
     try {
@@ -248,11 +256,35 @@ export default function HomeScreen() {
       {/* Worker List */}
       <View style={styles.listHeader}>
         <Text style={styles.sectionTitle}>
-          Nearby Service Providers ({workers.length})
+          Nearby Service Providers {user ? `(${workers.length})` : ""}
         </Text>
       </View>
 
-      {loading ? (
+      {!user ? (
+        <View style={styles.authGateCard}>
+          <View style={styles.authGateIconCircle}>
+            <Ionicons name="lock-closed" size={30} color="#2563EB" />
+          </View>
+          <Text style={styles.authGateTitle}>Sign In to View Available Workers</Text>
+          <Text style={styles.authGateSubtitle}>
+            To protect worker security and verify dispatch locations, please sign in or register to browse technicians and book services.
+          </Text>
+          <View style={styles.authGateActions}>
+            <TouchableOpacity
+              style={styles.signInGateBtn}
+              onPress={() => router.push("/login")}
+            >
+              <Text style={styles.signInGateBtnText}>Sign In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.registerGateBtn}
+              onPress={() => router.push("/register")}
+            >
+              <Text style={styles.registerGateBtnText}>Create Account</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : loading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator size="large" color="#2563EB" />
           <Text style={styles.loadingText}>Finding nearest verified professionals...</Text>
@@ -608,6 +640,75 @@ const styles = StyleSheet.create({
   bookButtonText: {
     color: "#FFFFFF",
     fontSize: 13,
+    fontWeight: "600",
+  },
+  authGateCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 24,
+    alignItems: "center",
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  authGateIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  authGateTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#0F172A",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  authGateSubtitle: {
+    fontSize: 13,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 19,
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  authGateActions: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  signInGateBtn: {
+    flex: 1,
+    backgroundColor: "#2563EB",
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  signInGateBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  registerGateBtn: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  registerGateBtnText: {
+    color: "#1E293B",
+    fontSize: 14,
     fontWeight: "600",
   },
 });

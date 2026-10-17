@@ -20,8 +20,8 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
-  register: (payload: any) => Promise<{ success: boolean; message?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string; user?: User }>;
+  register: (payload: any) => Promise<{ success: boolean; message?: string; user?: User }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -68,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await setStoredToken(receivedToken);
         await setStoredUser(receivedUser);
 
-        return { success: true };
+        return { success: true, user: receivedUser };
       }
       return { success: false, message: response.data.message || "Invalid credentials" };
     } catch (err: any) {
@@ -91,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await setStoredToken(receivedToken);
         await setStoredUser(receivedUser);
 
-        return { success: true };
+        return { success: true, user: receivedUser };
       }
       return { success: false, message: response.data.message || "Registration failed" };
     } catch (err: any) {
