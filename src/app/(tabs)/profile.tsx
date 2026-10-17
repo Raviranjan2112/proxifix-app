@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   Alert,
 } from "react-native";
@@ -32,99 +32,99 @@ export default function ProfileScreen() {
   if (!user) {
     return (
       <View style={styles.guestContainer}>
-        <View style={styles.guestAvatar}>
-          <Ionicons name="person" size={48} color="#94A3B8" />
+        {/* hero-card style */}
+        <View style={styles.heroCard}>
+          <View style={styles.serviceIconBox}>
+            <Text style={{ fontSize: 32 }}>👤</Text>
+          </View>
+          <Text style={styles.eyebrow}>WELCOME</Text>
+          <Text style={styles.heading}>Welcome to ProxiFix</Text>
+          <Text style={styles.muted}>
+            Sign in or create an account to book verified local workers, track bookings, or manage your service provider profile.
+          </Text>
+          <View style={styles.heroActions}>
+            <Pressable
+              style={({ pressed }) => [styles.btnPrimary, styles.heroBtn, pressed && styles.btnPrimaryHover]}
+              onPress={() => router.push("/login")}
+            >
+              <Text style={styles.btnPrimaryText}>Sign In</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.btnOutline, styles.heroBtn, pressed && { backgroundColor: "#e4f4e8" }]}
+              onPress={() => router.push("/register")}
+            >
+              <Text style={styles.btnOutlineText}>Create New Account</Text>
+            </Pressable>
+          </View>
         </View>
-        <Text style={styles.guestTitle}>Welcome to ProxiFix</Text>
-        <Text style={styles.guestSubtitle}>
-          Sign in or create an account to book verified local workers, track bookings, or manage your service provider profile.
-        </Text>
-
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={() => router.push("/login")}
-        >
-          <Text style={styles.primaryBtnText}>Sign In</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryBtn}
-          onPress={() => router.push("/register")}
-        >
-          <Text style={styles.secondaryBtnText}>Create New Account</Text>
-        </TouchableOpacity>
       </View>
     );
   }
 
   return (
     <ScrollView style={styles.container}>
-      {/* Profile Card */}
+      {/* Profile Card — matches .worker-card with avatar */}
       <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
+        <View style={styles.workerAvatar}>
+          <Text style={styles.workerAvatarText}>
             {user.name ? user.name[0].toUpperCase() : "U"}
           </Text>
         </View>
         <View style={styles.infoCol}>
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
-          {user.phone && <Text style={styles.userPhone}>{user.phone}</Text>}
-          <View style={styles.roleTag}>
-            <Text style={styles.roleTagText}>{user.role}</Text>
+          <Text style={styles.workerName}>{user.name}</Text>
+          <Text style={styles.workerMeta}>{user.email}</Text>
+          {user.phone && <Text style={styles.workerMeta}>{user.phone}</Text>}
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusBadgeText}>{user.role}</Text>
           </View>
         </View>
       </View>
 
-      {/* Role-Specific Portals */}
+      {/* Role Portals */}
       {user.role === "WORKER" && (
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Worker Tools</Text>
-          <TouchableOpacity
-            style={styles.menuItem}
+          <Text style={styles.eyebrow}>WORKER TOOLS</Text>
+          <Pressable
+            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemHover]}
             onPress={() => router.push("/worker-portal")}
           >
-            <View style={[styles.menuIcon, { backgroundColor: "#DCFCE7" }]}>
-              <Ionicons name="briefcase" size={20} color="#16A34A" />
+            <View style={[styles.serviceIconBox, { backgroundColor: "#ddf2e4", width: 42, height: 42 }]}>
+              <Ionicons name="briefcase" size={20} color="#075c31" />
             </View>
             <View style={styles.menuContent}>
               <Text style={styles.menuTitle}>Worker Workspace</Text>
-              <Text style={styles.menuSubtitle}>
-                Manage incoming jobs, online toggle & live GPS
-              </Text>
+              <Text style={styles.menuSubtitle}>Manage incoming jobs, online toggle & live GPS</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-          </TouchableOpacity>
+          </Pressable>
         </View>
       )}
 
       {user.role === "ADMIN" && (
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Administrative Tools</Text>
-          <TouchableOpacity
-            style={styles.menuItem}
+          <Text style={styles.eyebrow}>ADMINISTRATIVE TOOLS</Text>
+          <Pressable
+            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemHover]}
             onPress={() => router.push("/admin-portal")}
           >
-            <View style={[styles.menuIcon, { backgroundColor: "#EEF2FF" }]}>
-              <Ionicons name="shield-checkmark" size={20} color="#4F46E5" />
+            <View style={[styles.serviceIconBox, { backgroundColor: "#ddf2e4", width: 42, height: 42 }]}>
+              <Ionicons name="shield-checkmark" size={20} color="#075c31" />
             </View>
             <View style={styles.menuContent}>
               <Text style={styles.menuTitle}>Security & Audit Center</Text>
-              <Text style={styles.menuSubtitle}>
-                Review IP audits, approve workers & manage blocks
-              </Text>
+              <Text style={styles.menuSubtitle}>Review IP audits, approve workers & manage blocks</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-          </TouchableOpacity>
+          </Pressable>
         </View>
       )}
 
-      {/* General Settings */}
+      {/* Settings */}
       <View style={styles.section}>
-        <Text style={styles.sectionHeader}>Preferences & About</Text>
+        <Text style={styles.eyebrow}>PREFERENCES & ABOUT</Text>
 
         <View style={styles.menuItem}>
-          <View style={[styles.menuIcon, { backgroundColor: "#F1F5F9" }]}>
+          <View style={[styles.serviceIconBox, { backgroundColor: "#f1f5f9", width: 42, height: 42 }]}>
             <Ionicons name="shield-outline" size={20} color="#475569" />
           </View>
           <View style={styles.menuContent}>
@@ -134,7 +134,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.menuItem}>
-          <View style={[styles.menuIcon, { backgroundColor: "#F1F5F9" }]}>
+          <View style={[styles.serviceIconBox, { backgroundColor: "#f1f5f9", width: 42, height: 42 }]}>
             <Ionicons name="information-circle-outline" size={20} color="#475569" />
           </View>
           <View style={styles.menuContent}>
@@ -144,13 +144,22 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Sign Out Button */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Ionicons name="log-out-outline" size={18} color="#DC2626" />
+      {/* Sign Out — .btn-danger style */}
+      <Pressable
+        style={({ pressed }) => [styles.logoutBtn, pressed && styles.logoutBtnHover]}
+        onPress={handleLogout}
+      >
+        <Ionicons name="log-out-outline" size={18} color="#a61b1b" />
         <Text style={styles.logoutBtnText}>Sign Out</Text>
-      </TouchableOpacity>
+      </Pressable>
 
-      <View style={{ height: 40 }} />
+      {/* Site footer matching .site-footer */}
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>© 2026 ProxiFix. Trusted home services made simple.</Text>
+        <Text style={styles.footerCredit}>Crafted by Ravi Ranjan Kumar</Text>
+      </View>
+
+      <View style={{ height: 32 }} />
     </ScrollView>
   );
 }
@@ -158,165 +167,171 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#effaf3",
     padding: 16,
   },
   guestContainer: {
     flex: 1,
     justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-    backgroundColor: "#F8FAFC",
+    alignItems: "stretch",
+    padding: 20,
+    backgroundColor: "#effaf3",
   },
-  guestAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#E2E8F0",
+  heroCard: {
+    padding: 28,
+    backgroundColor: "#ffffff",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#e1e8e3",
+    shadowColor: "#14532d",
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.1,
+    shadowRadius: 44,
+    elevation: 4,
+  },
+  serviceIconBox: {
+    width: 54,
+    height: 54,
+    backgroundColor: "#e4f4e8",
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
   },
-  guestTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#0F172A",
+  eyebrow: {
+    color: "#08713d",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.2,
     marginBottom: 6,
   },
-  guestSubtitle: {
+  heading: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#102a1c",
+    marginBottom: 8,
+  },
+  muted: {
+    color: "#61726a",
     fontSize: 13,
-    color: "#64748B",
-    textAlign: "center",
-    lineHeight: 18,
-    marginBottom: 24,
-  },
-  primaryBtn: {
-    backgroundColor: "#075c31",
-    width: "100%",
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  primaryBtnText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 15,
-  },
-  secondaryBtn: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    width: "100%",
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  secondaryBtnText: {
-    color: "#0F172A",
-    fontWeight: "600",
-    fontSize: 15,
-  },
-  profileCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    flexDirection: "row",
-    alignItems: "center",
+    lineHeight: 19,
     marginBottom: 20,
   },
-  avatar: {
+  heroActions: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
+  heroBtn: { flex: 1 },
+  btnPrimary: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 20,
+    backgroundColor: "#075c31",
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  btnPrimaryHover: { backgroundColor: "#064a28" },
+  btnPrimaryText: { color: "#ffffff", fontWeight: "800", fontSize: 14 },
+  btnOutline: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 20,
+    backgroundColor: "#ffffff",
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#075c31",
+  },
+  btnOutlineText: { color: "#075c31", fontWeight: "800", fontSize: 14 },
+  // Profile card — .worker-card style
+  profileCard: {
+    flexDirection: "row",
+    gap: 16,
+    padding: 22,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "rgba(151,190,160,0.5)",
+    borderRadius: 16,
+    marginBottom: 20,
+    shadowColor: "#11423620",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 30,
+    elevation: 3,
+  },
+  workerAvatar: {
+    flexShrink: 0,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "#075c31",
+    backgroundColor: "#ddf2e4",
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: {
-    color: "#FFFFFF",
+  workerAvatarText: {
+    color: "#075c31",
     fontSize: 24,
-    fontWeight: "700",
+    fontWeight: "800",
   },
-  infoCol: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  userName: {
+  infoCol: { flex: 1 },
+  workerName: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#102a1c",
+    marginBottom: 4,
   },
-  userEmail: {
+  workerMeta: {
     fontSize: 13,
-    color: "#64748B",
-    marginTop: 2,
+    color: "#61726a",
+    marginBottom: 2,
   },
-  userPhone: {
-    fontSize: 12,
-    color: "#94A3B8",
-    marginTop: 2,
-  },
-  roleTag: {
+  // .status-approved
+  statusBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#EFFAF3",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
     marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: "#ddf2e4",
+    borderRadius: 999,
   },
-  roleTagText: {
-    color: "#075c31",
+  statusBadgeText: {
+    color: "#076332",
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "800",
   },
-  section: {
-    marginBottom: 20,
-  },
-  sectionHeader: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#64748B",
-    textTransform: "uppercase",
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
+  section: { marginBottom: 20 },
+  // menu items — .dashboard-hover-card equivalent
   menuItem: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
     padding: 14,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(151,190,160,0.5)",
     marginBottom: 8,
+    shadowColor: "#11423620",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 30,
+    elevation: 2,
   },
-  menuIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
+  menuItemHover: {
+    borderColor: "#78ad87",
+    shadowColor: "#114236",
+    shadowOffset: { width: 0, height: 22 },
+    shadowOpacity: 0.15,
+    shadowRadius: 38,
+    elevation: 5,
   },
-  menuContent: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  menuTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#0F172A",
-  },
-  menuSubtitle: {
-    fontSize: 12,
-    color: "#64748B",
-    marginTop: 2,
-  },
+  menuContent: { marginLeft: 12, flex: 1 },
+  menuTitle: { fontSize: 14, fontWeight: "700", color: "#102a1c" },
+  menuSubtitle: { fontSize: 12, color: "#61726a", marginTop: 2 },
+  // .btn-danger
   logoutBtn: {
-    backgroundColor: "#FEE2E2",
-    borderRadius: 10,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#dba2a2",
+    borderRadius: 9,
     padding: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -324,9 +339,33 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 8,
   },
+  logoutBtnHover: {
+    backgroundColor: "#b42318",
+    borderColor: "#b42318",
+  },
   logoutBtnText: {
-    color: "#DC2626",
+    color: "#a61b1b",
     fontWeight: "700",
     fontSize: 14,
+  },
+  // .site-footer
+  footer: {
+    marginTop: 32,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    backgroundColor: "#10291a",
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  footerText: {
+    color: "#d6e5d8",
+    textAlign: "center",
+    fontSize: 12,
+  },
+  footerCredit: {
+    marginTop: 4,
+    color: "#a9cbb0",
+    fontSize: 11,
+    textAlign: "center",
   },
 });

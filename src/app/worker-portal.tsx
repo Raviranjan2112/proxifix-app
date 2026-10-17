@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   Switch,
   ActivityIndicator,
   Alert,
@@ -17,17 +17,13 @@ import { useAuth } from "../context/AuthContext";
 
 export default function WorkerPortalScreen() {
   const { user } = useAuth();
-
   const [isOnline, setIsOnline] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadWorkerData();
-  }, []);
+  useEffect(() => { loadWorkerData(); }, []);
 
   async function loadWorkerData() {
     setLoading(true);
@@ -36,15 +32,10 @@ export default function WorkerPortalScreen() {
         api.get("/workers/me"),
         api.get("/bookings"),
       ]);
-
       if (profRes.data?.success) {
-        setProfile(profRes.data.worker);
         setIsOnline(profRes.data.worker.online_status === true || profRes.data.worker.online_status === "ONLINE");
       }
-
-      if (bookRes.data?.success) {
-        setBookings(bookRes.data.bookings || []);
-      }
+      if (bookRes.data?.success) setBookings(bookRes.data.bookings || []);
     } catch (err: any) {
       console.error("Worker load error:", err);
     } finally {
@@ -53,47 +44,34 @@ export default function WorkerPortalScreen() {
     }
   }
 
-  // Toggle online and broadcast GPS
   const handleToggleOnline = async (value: boolean) => {
     setIsOnline(value);
     try {
-      let currentLat: number | undefined;
-      let currentLon: number | undefined;
-
-      const { status: permStatus } = await Location.requestForegroundPermissionsAsync();
-      if (permStatus === "granted") {
-        const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        currentLat = loc.coords.latitude;
-        currentLon = loc.coords.longitude;
+      let lat: number | undefined, lon: number | undefined;
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        lat = loc.coords.latitude;
+        lon = loc.coords.longitude;
       }
-
       await api.put("/workers/status", {
         onlineStatus: value,
         availabilityStatus: value ? "AVAILABLE" : "OFFLINE",
-        ...(currentLat && currentLon ? { latitude: currentLat, longitude: currentLon } : {}),
+        ...(lat && lon ? { latitude: lat, longitude: lon } : {}),
       });
-
-      if (value && currentLat && currentLon) {
-        await api.put("/workers/location", {
-          latitude: currentLat,
-          longitude: currentLon,
-        });
-      }
+      if (value && lat && lon) await api.put("/workers/location", { latitude: lat, longitude: lon });
     } catch (err: any) {
-      Alert.alert("Status Error", err.response?.data?.message || "Failed to update availability status.");
+      Alert.alert("Status Error", err.response?.data?.message || "Failed to update status.");
       setIsOnline(!value);
     }
   };
 
-  // Update booking status: ACCEPTED, REJECTED, IN_PROGRESS, COMPLETED
   const handleStatusUpdate = async (bookingId: string, status: string) => {
     setActionLoadingId(bookingId);
     try {
       const res = await api.put(`/bookings/${bookingId}/status`, { status });
       if (res.data?.success) {
-        Alert.alert("Updated", `Booking status updated to ${status}.`);
+        Alert.alert("Updated", `Booking updated to ${status}.`);
         loadWorkerData();
       }
     } catch (err: any) {
@@ -103,30 +81,29 @@ export default function WorkerPortalScreen() {
     }
   };
 
+  const pending = bookings.filter((b) => b.status === "PENDING").length;
+  const active = bookings.filter((b) => ["IN_PROGRESS", "ACCEPTED"].includes(b.status)).length;
+  const completed = bookings.filter((b) => b.status === "COMPLETED").length;
+
   return (
     <ScrollView
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadWorkerData(); }} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => { setRefreshing(true); loadWorkerData(); }}
+          tintColor="#075c31"
+        />
       }
     >
-      {/* Online / Offline Status Toggle Bar */}
-      <View style={styles.statusBar}>
+      {/* Online toggle — like worker-dashboard status panel */}
+      <View style={styles.statusCard}>
         <View style={styles.statusLeft}>
-          <View
-            style={[
-              styles.statusIndicator,
-              { backgroundColor: isOnline ? "#10B981" : "#94A3B8" },
-            ]}
-          />
+          <View style={[styles.statusDot, { backgroundColor: isOnline ? "#10B981" : "#94A3B8" }]} />
           <View>
-            <Text style={styles.statusTitle}>
-              {isOnline ? "You Are ONLINE" : "You Are OFFLINE"}
-            </Text>
+            <Text style={styles.statusTitle}>{isOnline ? "You Are ONLINE" : "You Are OFFLINE"}</Text>
             <Text style={styles.statusSubtitle}>
-              {isOnline
-                ? "Visible to customers within search radius"
-                : "Not receiving on-demand requests"}
+              {isOnline ? "Visible to customers within search radius" : "Not receiving on-demand requests"}
             </Text>
           </View>
         </View>
@@ -138,50 +115,42 @@ export default function WorkerPortalScreen() {
         />
       </View>
 
-      {/* Metrics Row */}
+      {/* Metrics row — .admin-summary-card style */}
       <View style={styles.metricsRow}>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricVal}>
-            {bookings.filter((b) => b.status === "PENDING").length}
-          </Text>
-          <Text style={styles.metricLabel}>New Requests</Text>
-        </View>
-
-        <View style={styles.metricCard}>
-          <Text style={styles.metricVal}>
-            {bookings.filter((b) => b.status === "IN_PROGRESS" || b.status === "ACCEPTED").length}
-          </Text>
-          <Text style={styles.metricLabel}>Active Jobs</Text>
-        </View>
-
-        <View style={styles.metricCard}>
-          <Text style={[styles.metricVal, { color: "#059669" }]}>
-            {bookings.filter((b) => b.status === "COMPLETED").length}
-          </Text>
-          <Text style={styles.metricLabel}>Completed</Text>
-        </View>
+        {[
+          { label: "New Requests", val: pending, color: "#102a1c" },
+          { label: "Active Jobs", val: active, color: "#102a1c" },
+          { label: "Completed", val: completed, color: "#076332" },
+        ].map((m) => (
+          <View key={m.label} style={styles.metricCard}>
+            <Text style={[styles.metricVal, { color: m.color }]}>{m.val}</Text>
+            <Text style={styles.metricLabel}>{m.label}</Text>
+          </View>
+        ))}
       </View>
 
-      {/* Booking Requests */}
-      <Text style={styles.sectionTitle}>Incoming Booking Requests</Text>
+      {/* Incoming Bookings */}
+      <Text style={styles.eyebrow}>INCOMING REQUESTS</Text>
+      <Text style={styles.sectionHeading}>Booking Requests</Text>
 
       {loading ? (
         <ActivityIndicator size="small" color="#075c31" style={{ marginVertical: 20 }} />
       ) : bookings.length === 0 ? (
         <View style={styles.emptyCard}>
-          <Ionicons name="notifications-off-outline" size={36} color="#94A3B8" />
+          <Text style={{ fontSize: 32 }}>🔔</Text>
           <Text style={styles.emptyText}>No customer bookings assigned yet.</Text>
         </View>
       ) : (
         bookings.map((b) => (
-          <View key={b.id} style={styles.jobCard}>
+          <View key={b.id} style={styles.workerCard}>
+            {/* Job header */}
             <View style={styles.jobHeader}>
               <View>
                 <Text style={styles.customerName}>{b.customer_name || "Customer"}</Text>
                 <Text style={styles.customerPhone}>{b.customer_phone || "Contact via App"}</Text>
               </View>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{b.status}</Text>
+              <View style={getStatusBadgeStyle(b.status).container}>
+                <Text style={getStatusBadgeStyle(b.status).text}>{b.status}</Text>
               </View>
             </View>
 
@@ -190,241 +159,180 @@ export default function WorkerPortalScreen() {
             )}
 
             <View style={styles.locRow}>
-              <Ionicons name="location-outline" size={14} color="#64748B" />
+              <Ionicons name="location-outline" size={13} color="#61726a" />
               <Text style={styles.locText} numberOfLines={1}>
                 {b.address || "Customer delivery address"}
               </Text>
             </View>
 
-            {/* Actions based on status */}
+            {/* Actions — .admin-actions row */}
             {b.status === "PENDING" && (
-              <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnReject]}
+              <View style={styles.adminActions}>
+                <Pressable
+                  style={({ pressed }) => [styles.btnDanger, styles.actionBtn, pressed && styles.btnDangerHover]}
                   onPress={() => handleStatusUpdate(b.id, "REJECTED")}
                   disabled={actionLoadingId === b.id}
                 >
-                  <Text style={styles.btnRejectText}>Decline</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnAccept]}
+                  <Text style={styles.btnDangerText}>Decline</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.btnPrimary, styles.actionBtn, pressed && styles.btnPrimaryHover]}
                   onPress={() => handleStatusUpdate(b.id, "ACCEPTED")}
                   disabled={actionLoadingId === b.id}
                 >
-                  <Text style={styles.btnAcceptText}>Accept Request</Text>
-                </TouchableOpacity>
+                  <Text style={styles.btnPrimaryText}>Accept Request</Text>
+                </Pressable>
               </View>
             )}
 
             {b.status === "ACCEPTED" && (
-              <TouchableOpacity
-                style={[styles.btn, styles.btnStart]}
+              <Pressable
+                style={({ pressed }) => [styles.btnPrimary, { marginTop: 10 }, pressed && styles.btnPrimaryHover]}
                 onPress={() => handleStatusUpdate(b.id, "IN_PROGRESS")}
                 disabled={actionLoadingId === b.id}
               >
-                <Ionicons name="play" size={16} color="#FFFFFF" />
-                <Text style={styles.btnStartText}>Start Service Job</Text>
-              </TouchableOpacity>
+                <Ionicons name="play" size={14} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.btnPrimaryText}>Start Service Job</Text>
+              </Pressable>
             )}
 
             {b.status === "IN_PROGRESS" && (
-              <TouchableOpacity
-                style={[styles.btn, styles.btnComplete]}
+              <Pressable
+                style={({ pressed }) => [styles.btnPrimary, { marginTop: 10 }, pressed && styles.btnPrimaryHover]}
                 onPress={() => handleStatusUpdate(b.id, "COMPLETED")}
                 disabled={actionLoadingId === b.id}
               >
-                <Ionicons name="checkmark-done" size={16} color="#FFFFFF" />
-                <Text style={styles.btnCompleteText}>Mark Job Completed</Text>
-              </TouchableOpacity>
+                <Ionicons name="checkmark-done" size={14} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.btnPrimaryText}>Mark Job Completed</Text>
+              </Pressable>
             )}
           </View>
         ))
       )}
 
-      <View style={{ height: 40 }} />
+      <View style={{ height: 48 }} />
     </ScrollView>
   );
 }
 
+function getStatusBadgeStyle(status: string) {
+  if (status === "COMPLETED") return {
+    container: { backgroundColor: "#ddf2e4", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+    text: { color: "#076332", fontSize: 11, fontWeight: "700" as const },
+  };
+  if (status === "REJECTED") return {
+    container: { backgroundColor: "#fee4e2", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+    text: { color: "#a61b1b", fontSize: 11, fontWeight: "700" as const },
+  };
+  if (status === "IN_PROGRESS") return {
+    container: { backgroundColor: "#fff3cf", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+    text: { color: "#8b5c00", fontSize: 11, fontWeight: "700" as const },
+  };
+  return {
+    container: { backgroundColor: "#effaf3", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+    text: { color: "#075c31", fontSize: 11, fontWeight: "700" as const },
+  };
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
+  container: { flex: 1, backgroundColor: "#effaf3", padding: 16 },
+  // Status card
+  statusCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
     padding: 16,
-  },
-  statusBar: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(151,190,160,0.5)",
     marginBottom: 16,
+    shadowColor: "#11423620",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 30,
+    elevation: 3,
   },
-  statusLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  statusIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 10,
-  },
-  statusTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  statusSubtitle: {
-    fontSize: 11,
-    color: "#64748B",
-    marginTop: 2,
-  },
-  metricsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 20,
-  },
+  statusLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
+  statusDot: { width: 12, height: 12, borderRadius: 6, marginRight: 12 },
+  statusTitle: { fontSize: 14, fontWeight: "700", color: "#102a1c" },
+  statusSubtitle: { fontSize: 11, color: "#61726a", marginTop: 2 },
+  // Metrics — .admin-summary-card
+  metricsRow: { flexDirection: "row", gap: 10, marginBottom: 20 },
   metricCard: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    padding: 14,
+    backgroundColor: "#ffffff",
+    borderRadius: 14,
+    padding: 16,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(151,190,160,0.5)",
+    shadowColor: "#11423620",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 1,
+    shadowRadius: 25,
+    elevation: 2,
   },
-  metricVal: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#075c31",
-  },
-  metricLabel: {
-    fontSize: 11,
-    color: "#64748B",
-    fontWeight: "600",
-    marginTop: 4,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0F172A",
-    marginBottom: 10,
-  },
+  metricVal: { fontSize: 28, fontWeight: "800", color: "#102a1c" },
+  metricLabel: { fontSize: 11, color: "#61726a", fontWeight: "700", marginTop: 4, textAlign: "center" },
+  eyebrow: { color: "#08713d", fontSize: 11, fontWeight: "800", letterSpacing: 1.2, marginBottom: 4 },
+  sectionHeading: { fontSize: 20, fontWeight: "800", color: "#102a1c", marginBottom: 14 },
   emptyCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
     padding: 30,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#e1e8e3",
   },
-  emptyText: {
-    fontSize: 13,
-    color: "#64748B",
-    marginTop: 8,
-  },
-  jobCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
+  emptyText: { fontSize: 13, color: "#61726a", marginTop: 8, textAlign: "center" },
+  // .worker-card
+  workerCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 18,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(151,190,160,0.5)",
     marginBottom: 12,
+    shadowColor: "#11423620",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 30,
+    elevation: 2,
   },
-  jobHeader: {
+  jobHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
+  customerName: { fontSize: 15, fontWeight: "700", color: "#102a1c" },
+  customerPhone: { fontSize: 12, color: "#61726a", marginTop: 2 },
+  desc: { fontSize: 13, color: "#334155", fontStyle: "italic", marginVertical: 8 },
+  locRow: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10 },
+  locText: { fontSize: 12, color: "#61726a", flex: 1 },
+  // admin-actions
+  adminActions: { flexDirection: "row", gap: 10, flexWrap: "wrap", marginTop: 8 },
+  actionBtn: { flex: 1, minHeight: 40 },
+  btnPrimary: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  customerName: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  customerPhone: {
-    fontSize: 12,
-    color: "#64748B",
-    marginTop: 2,
-  },
-  badge: {
-    backgroundColor: "#EFFAF3",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  badgeText: {
-    color: "#075c31",
-    fontWeight: "700",
-    fontSize: 11,
-  },
-  desc: {
-    fontSize: 13,
-    color: "#334155",
-    fontStyle: "italic",
-    marginVertical: 8,
-  },
-  locRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginBottom: 12,
-  },
-  locText: {
-    fontSize: 12,
-    color: "#64748B",
-    flex: 1,
-  },
-  actionRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 6,
-  },
-  btn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "row",
-    gap: 6,
-  },
-  btnReject: {
-    backgroundColor: "#FEE2E2",
-  },
-  btnRejectText: {
-    color: "#DC2626",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  btnAccept: {
+    minHeight: 46,
+    paddingHorizontal: 20,
     backgroundColor: "#075c31",
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
-  btnAcceptText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 13,
+  btnPrimaryHover: { backgroundColor: "#064a28" },
+  btnPrimaryText: { color: "#ffffff", fontWeight: "800", fontSize: 13 },
+  // .btn-danger
+  btnDanger: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 20,
+    backgroundColor: "#ffffff",
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#dba2a2",
   },
-  btnStart: {
-    backgroundColor: "#0a7a42",
-    marginTop: 8,
-  },
-  btnStartText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  btnComplete: {
-    backgroundColor: "#16A34A",
-    marginTop: 8,
-  },
-  btnCompleteText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 13,
-  },
+  btnDangerHover: { backgroundColor: "#b42318", borderColor: "#b42318" },
+  btnDangerText: { color: "#a61b1b", fontWeight: "800", fontSize: 13 },
 });

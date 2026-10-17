@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   ActivityIndicator,
   Alert,
@@ -31,28 +31,21 @@ export default function BookScreen() {
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [address, setAddress] = useState("Acquiring current GPS location...");
   const [submitting, setSubmitting] = useState(false);
+  const [focused, setFocused] = useState("");
 
   useEffect(() => {
     async function getLocation() {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === "granted") {
-          const loc = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          const c = {
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-          };
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const c = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
           setCoords(c);
-
           try {
             const rev = await Location.reverseGeocodeAsync(c);
-            if (rev && rev.length > 0) {
+            if (rev?.length > 0) {
               const r = rev[0];
-              setAddress(
-                `${r.name || r.street || "Current Address"}, ${r.city || r.district || ""}`
-              );
+              setAddress(`${r.name || r.street || "Current Address"}, ${r.city || r.district || ""}`);
             } else {
               setAddress(`${c.latitude.toFixed(4)}°N, ${c.longitude.toFixed(4)}°E`);
             }
@@ -76,15 +69,12 @@ export default function BookScreen() {
       Alert.alert("Job Details", "Please provide at least 10 characters explaining the service issue.");
       return;
     }
-
     if (!coords) {
       Alert.alert("Location Error", "Could not capture your location coordinates.");
       return;
     }
-
     setSubmitting(true);
     try {
-      // If serviceCategoryId is missing, resolve it from services list
       let categoryId = serviceCategoryId;
       if (!categoryId) {
         const sRes = await api.get("/services");
@@ -93,7 +83,6 @@ export default function BookScreen() {
         );
         categoryId = found ? found.id : sRes.data?.services?.[0]?.id;
       }
-
       const payload: any = {
         workerId: id,
         serviceCategoryId: categoryId,
@@ -102,97 +91,119 @@ export default function BookScreen() {
         customerLatitude: coords.latitude,
         customerLongitude: coords.longitude,
       };
-
-      if (scheduledTime.trim()) {
-        payload.scheduledTime = new Date().toISOString();
-      }
+      if (scheduledTime.trim()) payload.scheduledTime = new Date().toISOString();
 
       const res = await api.post("/bookings", payload);
-
       if (res.data?.success) {
         Alert.alert(
           "Booking Confirmed! 🚀",
-          "Your service request has been sent to the professional. You can track progress in the Bookings tab.",
-          [
-            {
-              text: "View Bookings",
-              onPress: () => router.replace("/(tabs)/bookings"),
-            },
-          ]
+          "Your service request has been sent. You can track progress in the Bookings tab.",
+          [{ text: "View Bookings", onPress: () => router.replace("/(tabs)/bookings") }]
         );
       } else {
         Alert.alert("Booking Failed", res.data?.message || "Could not complete booking.");
       }
     } catch (err: any) {
-      Alert.alert(
-        "Booking Error",
-        err.response?.data?.message || "Network error. Please try again."
-      );
+      Alert.alert("Booking Error", err.response?.data?.message || "Network error. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
+  const inputStyle = (field: string) => [
+    styles.input,
+    focused === field && styles.inputFocused,
+  ];
+
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.card}>
-        <View style={styles.headerRow}>
-          <Ionicons name="calendar" size={24} color="#075c31" />
-          <Text style={styles.cardTitle}>Schedule Appointment</Text>
-        </View>
+      {/* booking-form-card */}
+      <View style={styles.bookingFormCard}>
+        <Text style={styles.eyebrow}>SCHEDULE APPOINTMENT</Text>
+        <Text style={styles.heading}>Book {workerName}</Text>
+        <Text style={styles.muted}>
+          {serviceName} · ₹{minCharge} starting price
+        </Text>
 
-        {/* Location Confirmation */}
+        {/* Location confirmation — .tracking-panel style */}
         <View style={styles.locBox}>
-          <Ionicons name="location-sharp" size={18} color="#059669" />
+          <Ionicons name="location-sharp" size={16} color="#076332" />
           <View style={{ marginLeft: 8, flex: 1 }}>
             <Text style={styles.locLabel}>Service Delivery Location</Text>
-            <Text style={styles.locText} numberOfLines={2}>
-              {address}
-            </Text>
+            <Text style={styles.locText} numberOfLines={2}>{address}</Text>
           </View>
         </View>
 
-        {/* Schedule Time */}
-        <Text style={styles.label}>Requested Time</Text>
-        <TextInput
-          style={styles.input}
-          value={scheduledTime}
-          onChangeText={setScheduledTime}
-          placeholder="e.g. Today at 4:00 PM"
-          placeholderTextColor="#94A3B8"
-        />
+        {/* Form fields matching auth-form */}
+        <View style={styles.authForm}>
+          <View>
+            <Text style={styles.label}>Requested Time</Text>
+            <TextInput
+              style={inputStyle("time")}
+              value={scheduledTime}
+              onChangeText={setScheduledTime}
+              placeholder="e.g. Today at 4:00 PM"
+              placeholderTextColor="#94b3a0"
+              onFocus={() => setFocused("time")}
+              onBlur={() => setFocused("")}
+            />
+          </View>
 
-        {/* Job Details */}
-        <Text style={styles.label}>Describe the issue or task *</Text>
-        <TextInput
-          style={[styles.input, { height: 90, textAlignVertical: "top" }]}
-          placeholder="e.g. Main switch tripping in kitchen whenever microwave runs..."
-          placeholderTextColor="#94A3B8"
-          multiline
-          value={description}
-          onChangeText={setDescription}
-        />
+          <View>
+            <Text style={styles.label}>Describe the issue or task *</Text>
+            <TextInput
+              style={[inputStyle("desc"), { height: 100, textAlignVertical: "top", paddingTop: 12 }]}
+              placeholder="e.g. Kitchen tap is leaking near the joint..."
+              placeholderTextColor="#94b3a0"
+              multiline
+              value={description}
+              onChangeText={setDescription}
+              onFocus={() => setFocused("desc")}
+              onBlur={() => setFocused("")}
+            />
+          </View>
 
-        {/* Platform Transparency notice */}
-        <View style={styles.infoBanner}>
-          <Ionicons name="shield-checkmark" size={16} color="#075c31" />
-          <Text style={styles.infoBannerText}>
-            Direct on-demand dispatch with STRIDE non-repudiation audit logging.
-          </Text>
+          {/* Shield info — .form-success style */}
+          <View style={styles.formSuccess}>
+            <Ionicons name="shield-checkmark" size={14} color="#076332" />
+            <Text style={styles.formSuccessText}>
+              Direct on-demand dispatch with STRIDE non-repudiation audit logging.
+            </Text>
+          </View>
+
+          {/* admin-actions buttons row */}
+          <View style={styles.adminActions}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.btnPrimary,
+                styles.actionBtn,
+                pressed && styles.btnPrimaryHover,
+                submitting && styles.btnDisabled,
+              ]}
+              onPress={handleCreateBooking}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.btnPrimaryText}>Send Booking Request</Text>
+              )}
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.btnOutline,
+                styles.actionBtn,
+                pressed && { backgroundColor: "#e4f4e8" },
+              ]}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.btnOutlineText}>Cancel</Text>
+            </Pressable>
+          </View>
         </View>
-
-        <TouchableOpacity
-          style={[styles.confirmBtn, submitting && styles.btnDisabled]}
-          onPress={handleCreateBooking}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.confirmBtnText}>Confirm Service Request</Text>
-          )}
-        </TouchableOpacity>
       </View>
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
@@ -200,94 +211,125 @@ export default function BookScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#effaf3",
     padding: 16,
   },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 20,
+  // .booking-form-card
+  bookingFormCard: {
+    padding: 28,
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#e1e8e3",
+    borderRadius: 16,
+    shadowColor: "#11423620",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 30,
+    elevation: 3,
   },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
+  eyebrow: {
+    color: "#08713d",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    marginBottom: 6,
+  },
+  heading: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#102a1c",
+    marginBottom: 4,
+  },
+  muted: {
+    color: "#61726a",
+    fontSize: 13,
+    lineHeight: 18,
     marginBottom: 16,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
+  // .tracking-panel style for location
   locBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#ECFDF5",
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: "#f7fcf8",
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
-    borderColor: "#A7F3D0",
+    borderColor: "#d4e8d8",
     marginBottom: 16,
   },
-  locLabel: {
-    fontSize: 11,
-    color: "#047857",
-    fontWeight: "600",
-  },
-  locText: {
-    fontSize: 13,
-    color: "#065F46",
-    fontWeight: "700",
-    marginTop: 2,
-  },
+  locLabel: { fontSize: 11, color: "#047857", fontWeight: "700" },
+  locText: { fontSize: 13, color: "#065F46", fontWeight: "700", marginTop: 2 },
+  authForm: { gap: 16 },
   label: {
+    color: "#234534",
     fontSize: 13,
-    fontWeight: "600",
-    color: "#334155",
-    marginBottom: 6,
-    marginTop: 8,
+    fontWeight: "700",
+    marginBottom: 7,
   },
   input: {
-    backgroundColor: "#F8FAFC",
+    width: "100%",
+    minHeight: 48,
+    paddingHorizontal: 14,
+    color: "#102a1c",
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: "#bdccc3",
+    borderRadius: 9,
     fontSize: 14,
-    color: "#0F172A",
-    marginBottom: 10,
   },
-  infoBanner: {
+  inputFocused: {
+    borderColor: "#08713d",
+    shadowColor: "#08713d",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  // .form-success
+  formSuccess: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EFFAF3",
-    padding: 10,
-    borderRadius: 6,
-    marginVertical: 12,
     gap: 8,
-  },
-  infoBannerText: {
-    fontSize: 11,
-    color: "#075c31",
-    flex: 1,
-    lineHeight: 16,
-  },
-  confirmBtn: {
-    backgroundColor: "#075c31",
+    padding: 12,
+    backgroundColor: "#ddf2e4",
     borderRadius: 8,
-    paddingVertical: 14,
+  },
+  formSuccessText: {
+    fontSize: 12,
+    color: "#076332",
+    flex: 1,
+    lineHeight: 17,
+  },
+  // .admin-actions
+  adminActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 8,
+  },
+  actionBtn: { flex: 1, minWidth: 120 },
+  btnPrimary: {
     alignItems: "center",
-    marginTop: 10,
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 20,
+    backgroundColor: "#075c31",
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
-  btnDisabled: {
-    opacity: 0.6,
+  btnPrimaryHover: { backgroundColor: "#064a28" },
+  btnDisabled: { opacity: 0.65 },
+  btnPrimaryText: { color: "#ffffff", fontWeight: "800", fontSize: 14 },
+  btnOutline: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 20,
+    backgroundColor: "#ffffff",
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#075c31",
   },
-  confirmBtnText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 15,
-  },
+  btnOutlineText: { color: "#075c31", fontWeight: "800", fontSize: 14 },
 });
