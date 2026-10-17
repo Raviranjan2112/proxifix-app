@@ -133,8 +133,8 @@ export default function WorkerPortalScreen() {
         <Switch
           value={isOnline}
           onValueChange={handleToggleOnline}
-          trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-          thumbColor={isOnline ? "#2563EB" : "#F1F5F9"}
+          trackColor={{ false: "#CBD5E1", true: "#6EE7B7" }}
+          thumbColor={isOnline ? "#075c31" : "#F1F5F9"}
         />
       </View>
 
@@ -166,7 +166,7 @@ export default function WorkerPortalScreen() {
       <Text style={styles.sectionTitle}>Incoming Booking Requests</Text>
 
       {loading ? (
-        <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 20 }} />
+        <ActivityIndicator size="small" color="#075c31" style={{ marginVertical: 20 }} />
       ) : bookings.length === 0 ? (
         <View style={styles.emptyCard}>
           <Ionicons name="notifications-off-outline" size={36} color="#94A3B8" />
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   metricVal: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#2563EB",
+    color: "#075c31",
   },
   metricLabel: {
     fontSize: 11,
@@ -352,13 +352,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   badge: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#EFFAF3",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
   },
   badgeText: {
-    color: "#2563EB",
+    color: "#075c31",
     fontWeight: "700",
     fontSize: 11,
   },
@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   btnAccept: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#075c31",
   },
   btnAcceptText: {
     color: "#FFFFFF",
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   btnStart: {
-    backgroundColor: "#4F46E5",
+    backgroundColor: "#0a7a42",
     marginTop: 8,
   },
   btnStartText: {

@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   roleTabActive: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#075c31",
   },
   roleTabText: {
     fontSize: 13,
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   registerBtn: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#075c31",
     borderRadius: 8,
     paddingVertical: 13,
     alignItems: "center",
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   },
   loginLink: {
     fontSize: 13,
-    color: "#2563EB",
+    color: "#075c31",
     fontWeight: "700",
   },
 });

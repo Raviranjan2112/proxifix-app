@@ -144,7 +144,7 @@ export default function AdminPortalScreen() {
             </Text>
 
             {loading ? (
-              <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 20 }} />
+              <ActivityIndicator size="small" color="#075c31" style={{ marginVertical: 20 }} />
             ) : auditLogs.length === 0 ? (
               <Text style={styles.emptyText}>No audit records found.</Text>
             ) : (
@@ -203,7 +203,7 @@ export default function AdminPortalScreen() {
             </Text>
 
             {loading ? (
-              <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 20 }} />
+              <ActivityIndicator size="small" color="#075c31" style={{ marginVertical: 20 }} />
             ) : pendingWorkers.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Ionicons name="checkmark-circle-outline" size={40} color="#10B981" />
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
   },
   tabBtnActive: {
-    backgroundColor: "#4F46E5",
+    backgroundColor: "#075c31",
   },
   tabBtnText: {
     fontSize: 12,
@@ -308,13 +308,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   strideBadge: {
-    backgroundColor: "#E0F2FE",
+    backgroundColor: "#EFFAF3",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   strideText: {
-    color: "#0369A1",
+    color: "#075c31",
     fontSize: 10,
     fontWeight: "700",
   },

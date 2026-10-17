@@ -181,7 +181,7 @@ export default function HomeScreen() {
       {/* GPS Location Bar */}
       <View style={styles.locationCard}>
         <View style={styles.locationInfo}>
-          <Ionicons name="location" size={20} color="#2563EB" />
+          <Ionicons name="location" size={20} color="#075c31" />
           <View style={{ marginLeft: 8, flex: 1 }}>
             <Text style={styles.locationLabel}>Your Hardware GPS Location</Text>
             <Text style={styles.locationValue} numberOfLines={1}>
@@ -193,7 +193,7 @@ export default function HomeScreen() {
           style={styles.refreshLocButton}
           onPress={requestDeviceLocation}
         >
-          <Ionicons name="locate" size={18} color="#2563EB" />
+          <Ionicons name="locate" size={18} color="#075c31" />
         </TouchableOpacity>
       </View>
 
@@ -263,7 +263,7 @@ export default function HomeScreen() {
       {!user ? (
         <View style={styles.authGateCard}>
           <View style={styles.authGateIconCircle}>
-            <Ionicons name="lock-closed" size={30} color="#2563EB" />
+            <Ionicons name="lock-closed" size={30} color="#075c31" />
           </View>
           <Text style={styles.authGateTitle}>Sign In to View Available Workers</Text>
           <Text style={styles.authGateSubtitle}>
@@ -286,7 +286,7 @@ export default function HomeScreen() {
         </View>
       ) : loading ? (
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color="#075c31" />
           <Text style={styles.loadingText}>Finding nearest verified professionals...</Text>
         </View>
       ) : workers.length === 0 ? (
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   refreshLocButton: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#EFFAF3",
     padding: 8,
     borderRadius: 8,
     marginLeft: 8,
@@ -453,8 +453,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   categoryPillActive: {
-    backgroundColor: "#2563EB",
-    borderColor: "#2563EB",
+    backgroundColor: "#075c31",
+    borderColor: "#075c31",
   },
   categoryPillText: {
     fontSize: 13,
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   radiusBtnActive: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#075c31",
   },
   radiusBtnText: {
     fontSize: 12,
@@ -552,14 +552,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#DBEAFE",
+    backgroundColor: "#D1FAE5",
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1D4ED8",
+    color: "#075c31",
   },
   workerInfo: {
     marginLeft: 12,
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
     color: "#0F172A",
   },
   bookButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#075c31",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
@@ -660,7 +660,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#EFFAF3",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 14,
@@ -687,7 +687,7 @@ const styles = StyleSheet.create({
   },
   signInGateBtn: {
     flex: 1,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#075c31",
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: "center",

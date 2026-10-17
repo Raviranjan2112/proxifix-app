@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#075c31",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     color: "#0F172A",
   },
   loginBtn: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#075c31",
     borderRadius: 8,
     paddingVertical: 13,
     alignItems: "center",
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   },
   registerLink: {
     fontSize: 13,
-    color: "#2563EB",
+    color: "#075c31",
     fontWeight: "700",
   },
 });

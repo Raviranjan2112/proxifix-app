@@ -38,7 +38,8 @@ export default function BookingsScreen() {
         setBookings(res.data.bookings || []);
       }
     } catch (err: any) {
-      console.error("Failed to load customer bookings:", err);
+      console.warn("Bookings status note:", err?.response?.data?.message || err?.message || err);
+      setBookings([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -73,6 +74,20 @@ export default function BookingsScreen() {
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
+      {user?.role === "ADMIN" && (
+        <TouchableOpacity
+          style={styles.adminBanner}
+          onPress={() => router.push("/admin-portal")}
+        >
+          <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" />
+          <View style={{ flex: 1, marginLeft: 8 }}>
+            <Text style={styles.adminBannerTitle}>Administrator Security Overview</Text>
+            <Text style={styles.adminBannerSubtitle}>Tap to inspect audit logs, workers & DREAD matrix</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+
       <View style={styles.header}>
         <Text style={styles.title}>Your Appointments</Text>
         <Text style={styles.subtitle}>
@@ -82,7 +97,7 @@ export default function BookingsScreen() {
 
       {loading ? (
         <View style={styles.centerLoading}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color="#075c31" />
           <Text style={styles.loadingText}>Fetching your bookings...</Text>
         </View>
       ) : bookings.length === 0 ? (
@@ -103,16 +118,16 @@ export default function BookingsScreen() {
         bookings.map((b) => {
           let statusColor = "#64748B";
           let statusBg = "#F1F5F9";
-          if (b.status === "PENDING") {
+          if (b.status === "PENDING" || b.booking_status === "PENDING") {
             statusColor = "#D97706";
             statusBg = "#FEF3C7";
-          } else if (b.status === "ACCEPTED" || b.status === "IN_PROGRESS") {
-            statusColor = "#2563EB";
-            statusBg = "#DBEAFE";
-          } else if (b.status === "COMPLETED") {
+          } else if (b.status === "ACCEPTED" || b.status === "STARTED" || b.booking_status === "ACCEPTED" || b.booking_status === "STARTED") {
+            statusColor = "#075c31";
+            statusBg = "#ECFDF5";
+          } else if (b.status === "COMPLETED" || b.booking_status === "COMPLETED") {
             statusColor = "#059669";
             statusBg = "#D1FAE5";
-          } else if (b.status === "CANCELLED" || b.status === "REJECTED") {
+          } else if (b.status === "CANCELLED" || b.status === "REJECTED" || b.booking_status === "REJECTED") {
             statusColor = "#DC2626";
             statusBg = "#FEE2E2";
           }
@@ -209,9 +224,32 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 18,
   },
+  adminBanner: {
+    backgroundColor: "#075c31",
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  adminBannerTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  adminBannerSubtitle: {
+    color: "#E2E8F0",
+    fontSize: 11,
+    marginTop: 2,
+  },
   loginBtn: {
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 24,
+    backgroundColor: "#075c31",
+    paddingHorizontal: 28,
     paddingVertical: 12,
     borderRadius: 8,
     marginTop: 20,
@@ -253,16 +291,14 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   findWorkerBtn: {
-    backgroundColor: "#EFF6FF",
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
-    paddingHorizontal: 16,
+    backgroundColor: "#075c31",
+    paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
     marginTop: 16,
   },
   findWorkerBtnText: {
-    color: "#2563EB",
+    color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 13,
   },

@@ -137,7 +137,7 @@ export default function BookScreen() {
     <ScrollView style={styles.container}>
       <View style={styles.card}>
         <View style={styles.headerRow}>
-          <Ionicons name="calendar" size={24} color="#2563EB" />
+          <Ionicons name="calendar" size={24} color="#075c31" />
           <Text style={styles.cardTitle}>Schedule Appointment</Text>
         </View>
 
@@ -175,7 +175,7 @@ export default function BookScreen() {
 
         {/* Platform Transparency notice */}
         <View style={styles.infoBanner}>
-          <Ionicons name="shield-checkmark" size={16} color="#2563EB" />
+          <Ionicons name="shield-checkmark" size={16} color="#075c31" />
           <Text style={styles.infoBannerText}>
             Direct on-demand dispatch with STRIDE non-repudiation audit logging.
           </Text>
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   infoBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#EFFAF3",
     padding: 10,
     borderRadius: 6,
     marginVertical: 12,
@@ -271,12 +271,12 @@ const styles = StyleSheet.create({
   },
   infoBannerText: {
     fontSize: 11,
-    color: "#1D4ED8",
+    color: "#075c31",
     flex: 1,
     lineHeight: 16,
   },
   confirmBtn: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#075c31",
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: "center",
