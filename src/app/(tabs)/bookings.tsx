@@ -4,10 +4,9 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   ActivityIndicator,
   RefreshControl,
-  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -48,23 +47,32 @@ export default function BookingsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadBookings();
+    if (user) {
+      loadBookings();
+    } else {
+      setRefreshing(false);
+    }
   };
 
   if (!user) {
     return (
       <View style={styles.centerBox}>
-        <Ionicons name="lock-closed-outline" size={48} color="#94A3B8" />
-        <Text style={styles.guestTitle}>Sign in to view your bookings</Text>
-        <Text style={styles.guestSubtitle}>
-          Track your active service appointments, live worker arrivals, and work history.
-        </Text>
-        <TouchableOpacity
-          style={styles.loginBtn}
-          onPress={() => router.push("/login")}
-        >
-          <Text style={styles.loginBtnText}>Sign In / Register</Text>
-        </TouchableOpacity>
+        <View style={styles.guestCard}>
+          <View style={styles.guestIconBox}>
+            <Ionicons name="lock-closed" size={32} color="#075c31" />
+          </View>
+          <Text style={styles.eyebrow}>SIGN IN REQUIRED</Text>
+          <Text style={styles.guestTitle}>Sign in to view your bookings</Text>
+          <Text style={styles.guestSubtitle}>
+            Track your active service appointments, live worker arrivals, and work history.
+          </Text>
+          <Pressable
+            style={({ pressed }) => [styles.btnPrimary, pressed && styles.btnPrimaryHover]}
+            onPress={() => router.push("/login")}
+          >
+            <Text style={styles.btnPrimaryText}>Sign In / Register</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -72,23 +80,24 @@ export default function BookingsScreen() {
   return (
     <ScrollView
       style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#075c31" />}
     >
       {user?.role === "ADMIN" && (
-        <TouchableOpacity
-          style={styles.adminBanner}
+        <Pressable
+          style={({ pressed }) => [styles.adminBanner, pressed && { opacity: 0.85 }]}
           onPress={() => router.push("/admin-portal")}
         >
           <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" />
-          <View style={{ flex: 1, marginLeft: 8 }}>
+          <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={styles.adminBannerTitle}>Administrator Security Overview</Text>
-            <Text style={styles.adminBannerSubtitle}>Tap to inspect audit logs, workers & DREAD matrix</Text>
+            <Text style={styles.adminBannerSubtitle}>Tap to inspect audit logs, workers & security alerts</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
-        </TouchableOpacity>
+        </Pressable>
       )}
 
       <View style={styles.header}>
+        <Text style={styles.eyebrow}>CUSTOMER DASHBOARD</Text>
         <Text style={styles.title}>Your Appointments</Text>
         <Text style={styles.subtitle}>
           Real-time tracking and job progress
@@ -102,76 +111,74 @@ export default function BookingsScreen() {
         </View>
       ) : bookings.length === 0 ? (
         <View style={styles.emptyCard}>
-          <Ionicons name="calendar-outline" size={44} color="#94A3B8" />
+          <View style={styles.guestIconBox}>
+            <Ionicons name="calendar-outline" size={36} color="#075c31" />
+          </View>
           <Text style={styles.emptyTitle}>No bookings yet</Text>
           <Text style={styles.emptyText}>
             Find a verified technician or service worker on the home tab to schedule an appointment.
           </Text>
-          <TouchableOpacity
-            style={styles.findWorkerBtn}
+          <Pressable
+            style={({ pressed }) => [styles.btnPrimary, { marginTop: 16 }, pressed && styles.btnPrimaryHover]}
             onPress={() => router.push("/(tabs)")}
           >
-            <Text style={styles.findWorkerBtnText}>Find Services Nearby</Text>
-          </TouchableOpacity>
+            <Text style={styles.btnPrimaryText}>Find Services Nearby</Text>
+          </Pressable>
         </View>
       ) : (
         bookings.map((b) => {
-          let statusColor = "#64748B";
-          let statusBg = "#F1F5F9";
-          if (b.status === "PENDING" || b.booking_status === "PENDING") {
-            statusColor = "#D97706";
-            statusBg = "#FEF3C7";
-          } else if (b.status === "ACCEPTED" || b.status === "STARTED" || b.booking_status === "ACCEPTED" || b.booking_status === "STARTED") {
-            statusColor = "#075c31";
-            statusBg = "#ECFDF5";
-          } else if (b.status === "COMPLETED" || b.booking_status === "COMPLETED") {
-            statusColor = "#059669";
-            statusBg = "#D1FAE5";
-          } else if (b.status === "CANCELLED" || b.status === "REJECTED" || b.booking_status === "REJECTED") {
-            statusColor = "#DC2626";
-            statusBg = "#FEE2E2";
+          const rawStatus = b.booking_status || b.status || "PENDING";
+          let statusColor = "#076332";
+          let statusBg = "#ddf2e4";
+
+          if (rawStatus === "PENDING") {
+            statusColor = "#8b5c00";
+            statusBg = "#fff3cf";
+          } else if (rawStatus === "CANCELLED" || rawStatus === "REJECTED") {
+            statusColor = "#a61b1b";
+            statusBg = "#fee4e2";
           }
 
           return (
             <View key={b.id} style={styles.bookingCard}>
               <View style={styles.bookingHeader}>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.serviceName}>{b.service_name || "Home Service"}</Text>
                   <Text style={styles.workerName}>Worker: {b.worker_name || "Assigned Pro"}</Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
                   <Text style={[styles.statusText, { color: statusColor }]}>
-                    {b.status}
+                    {rawStatus}
                   </Text>
                 </View>
               </View>
 
               <View style={styles.detailsRow}>
                 <View style={styles.detailItem}>
-                  <Ionicons name="time-outline" size={14} color="#64748B" />
+                  <Ionicons name="time-outline" size={14} color="#61726a" />
                   <Text style={styles.detailText}>
                     {new Date(b.created_at).toLocaleDateString()}
                   </Text>
                 </View>
                 <View style={styles.detailItem}>
-                  <Ionicons name="cash-outline" size={14} color="#64748B" />
+                  <Ionicons name="cash-outline" size={14} color="#61726a" />
                   <Text style={styles.detailText}>
-                    ₹{b.total_amount || b.minimum_charge || 250}
+                    ₹{b.total_amount || b.estimated_price || b.minimum_charge || 250}
                   </Text>
                 </View>
               </View>
 
-              {b.description && (
+              {b.service_description || b.description ? (
                 <Text style={styles.descText} numberOfLines={2}>
-                  "{b.description}"
+                  "{b.service_description || b.description}"
                 </Text>
-              )}
+              ) : null}
 
-              {b.status === "IN_PROGRESS" && (
+              {(rawStatus === "IN_PROGRESS" || rawStatus === "ARRIVING" || rawStatus === "STARTED") && (
                 <View style={styles.liveBanner}>
-                  <Ionicons name="radio" size={16} color="#2563EB" />
+                  <Ionicons name="radio" size={16} color="#076332" />
                   <Text style={styles.liveText}>
-                    Job in progress • Worker on site
+                    Job in progress • Worker on site or en route
                   </Text>
                 </View>
               )}
@@ -188,53 +195,84 @@ export default function BookingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#effaf3",
     padding: 16,
   },
   header: {
     marginBottom: 16,
   },
+  eyebrow: {
+    color: "#08713d",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    marginBottom: 4,
+    textTransform: "uppercase",
+  },
   title: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#0F172A",
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#102a1c",
   },
   subtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#61726a",
     marginTop: 2,
   },
   centerBox: {
     flex: 1,
     justifyContent: "center",
+    padding: 20,
+    backgroundColor: "#effaf3",
+  },
+  guestCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+    padding: 24,
     alignItems: "center",
-    padding: 32,
-    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#e1e8e3",
+    shadowColor: "#114236",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.08,
+    shadowRadius: 32,
+    elevation: 3,
+  },
+  guestIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#e4f4e8",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
   },
   guestTitle: {
     fontSize: 18,
-    fontWeight: "700",
-    color: "#1E293B",
-    marginTop: 16,
+    fontWeight: "800",
+    color: "#102a1c",
+    marginBottom: 6,
+    textAlign: "center",
   },
   guestSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#61726a",
     textAlign: "center",
-    marginTop: 8,
     lineHeight: 18,
+    marginBottom: 20,
+    paddingHorizontal: 8,
   },
   adminBanner: {
-    backgroundColor: "#075c31",
+    backgroundColor: "#064a28",
     borderRadius: 12,
     padding: 14,
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: "#114236",
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 3,
   },
   adminBannerTitle: {
@@ -243,20 +281,27 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   adminBannerSubtitle: {
-    color: "#E2E8F0",
+    color: "#d6e5d8",
     fontSize: 11,
     marginTop: 2,
   },
-  loginBtn: {
+  btnPrimary: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 24,
     backgroundColor: "#075c31",
-    paddingHorizontal: 28,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 20,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "transparent",
+    width: "100%",
   },
-  loginBtnText: {
+  btnPrimaryHover: {
+    backgroundColor: "#064a28",
+  },
+  btnPrimaryText: {
     color: "#FFFFFF",
-    fontWeight: "600",
+    fontWeight: "800",
     fontSize: 14,
   },
   centerLoading: {
@@ -265,50 +310,49 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 10,
-    color: "#64748B",
+    color: "#61726a",
     fontSize: 13,
   },
   emptyCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 32,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#e1e8e3",
     marginTop: 10,
+    shadowColor: "#114236",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 20,
+    elevation: 2,
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: "700",
-    color: "#1E293B",
-    marginTop: 12,
+    fontWeight: "800",
+    color: "#102a1c",
+    marginTop: 8,
   },
   emptyText: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#61726a",
     textAlign: "center",
     marginTop: 6,
     lineHeight: 18,
-  },
-  findWorkerBtn: {
-    backgroundColor: "#075c31",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  findWorkerBtnText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 13,
+    paddingHorizontal: 12,
   },
   bookingCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(151,190,160,0.5)",
     marginBottom: 12,
+    shadowColor: "#114236",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 20,
+    elevation: 2,
   },
   bookingHeader: {
     flexDirection: "row",
@@ -318,21 +362,21 @@ const styles = StyleSheet.create({
   serviceName: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#102a1c",
   },
   workerName: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#61726a",
     marginTop: 2,
   },
   statusBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 999,
   },
   statusText: {
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   detailsRow: {
     flexDirection: "row",
@@ -340,7 +384,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#edf2ee",
   },
   detailItem: {
     flexDirection: "row",
@@ -349,8 +393,8 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 12,
-    color: "#64748B",
-    fontWeight: "500",
+    color: "#61726a",
+    fontWeight: "600",
   },
   descText: {
     fontSize: 12,
@@ -361,15 +405,15 @@ const styles = StyleSheet.create({
   liveBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EFF6FF",
-    borderRadius: 6,
-    padding: 8,
+    backgroundColor: "#ddf2e4",
+    borderRadius: 8,
+    padding: 10,
     marginTop: 10,
     gap: 6,
   },
   liveText: {
     fontSize: 12,
-    color: "#1D4ED8",
-    fontWeight: "600",
+    color: "#076332",
+    fontWeight: "700",
   },
 });
