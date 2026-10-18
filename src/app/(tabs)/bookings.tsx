@@ -17,6 +17,33 @@ import { Ionicons } from "@expo/vector-icons";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 
+function formatLogDetails(details: any): string {
+  if (!details) return "";
+  if (typeof details === "string") {
+    try {
+      const parsed = JSON.parse(details);
+      if (typeof parsed === "object" && parsed !== null) {
+        return Object.entries(parsed)
+          .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`)
+          .join(", ");
+      }
+    } catch {
+      return details;
+    }
+    return details;
+  }
+  if (typeof details === "object") {
+    try {
+      return Object.entries(details)
+        .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`)
+        .join(", ");
+    } catch {
+      return JSON.stringify(details);
+    }
+  }
+  return String(details);
+}
+
 export default function BookingsScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -434,7 +461,7 @@ export default function BookingsScreen() {
 
                       {log.details ? (
                         <Text style={styles.auditDetails} numberOfLines={2}>
-                          "{log.details}"
+                          "{formatLogDetails(log.details)}"
                         </Text>
                       ) : null}
                     </View>
@@ -499,13 +526,13 @@ export default function BookingsScreen() {
                     {ipData.deviceGps?.lat && ipData.deviceGps?.lng ? (
                       <>
                         <Text style={styles.layerLine}>
-                          • GPS Lat: <Text style={styles.boldText}>{ipData.deviceGps.lat}</Text>
+                          • GPS Lat: <Text style={styles.boldText}>{String(ipData.deviceGps.lat)}</Text>
                         </Text>
                         <Text style={styles.layerLine}>
-                          • GPS Lng: <Text style={styles.boldText}>{ipData.deviceGps.lng}</Text>
+                          • GPS Lng: <Text style={styles.boldText}>{String(ipData.deviceGps.lng)}</Text>
                         </Text>
                         <Text style={styles.layerLine}>
-                          • Linked User: {ipData.deviceGps.name || "Logged In User"} ({ipData.deviceGps.role || "ADMIN"})
+                          • Linked User: {String(ipData.deviceGps.name || "Logged In User")} ({String(ipData.deviceGps.role || "ADMIN")})
                         </Text>
                         <Pressable
                           style={[styles.btnPrimary, { marginTop: 10, minHeight: 38 }]}
