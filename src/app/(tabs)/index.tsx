@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  TextInput,
+  TouchableOpacity,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
@@ -34,6 +36,7 @@ function getCategoryEmoji(name: string): string {
   if (lower.includes("paint")) return "🎨";
   if (lower.includes("clean")) return "🧹";
   if (lower.includes("appliance")) return "⚙️";
+  if (lower.includes("mechanic")) return "🚗";
   return "🔨";
 }
 
@@ -41,6 +44,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
 
+  // Customer state
   const [services, setServices] = useState<any[]>([]);
   const [selectedService, setSelectedService] = useState<string>("AC Repair");
   const [radius, setRadius] = useState(15);
@@ -51,10 +55,27 @@ export default function HomeScreen() {
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
+  // Admin state (mirrors website AdminDashboard.jsx)
+  const [adminSummary, setAdminSummary] = useState({
+    total_workers: 0,
+    pending_workers: 0,
+    approved_workers: 0,
+    rejected_workers: 0,
+  });
+  const [adminServiceCounts, setAdminServiceCounts] = useState<any[]>([]);
+  const [adminWorkers, setAdminWorkers] = useState<any[]>([]);
+  const [adminSearch, setAdminSearch] = useState("");
+  const [adminFilterService, setAdminFilterService] = useState("");
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
   useEffect(() => {
     requestDeviceLocation();
-    loadServices();
-  }, []);
+    if (user?.role === "ADMIN") {
+      loadAdminDashboardData();
+    } else {
+      loadServices();
+    }
+  }, [user]);
 
   async function loadServices() {
     try {
@@ -69,8 +90,36 @@ export default function HomeScreen() {
     }
   }
 
+  async function loadAdminDashboardData() {
+    setLoading(true);
+    try {
+      const res = await api.get("/admin/workers", {
+        params: {
+          service: adminFilterService || undefined,
+          search: adminSearch || undefined,
+        },
+      });
+      if (res.data?.success) {
+        if (res.data.summary) setAdminSummary(res.data.summary);
+        if (res.data.serviceCounts) setAdminServiceCounts(res.data.serviceCounts);
+        if (res.data.workers) setAdminWorkers(res.data.workers);
+      }
+    } catch (e) {
+      console.warn("Could not load admin dashboard data:", e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
   useEffect(() => {
-    if (coords && selectedService && user) {
+    if (user?.role === "ADMIN") {
+      loadAdminDashboardData();
+    }
+  }, [adminFilterService, adminSearch]);
+
+  useEffect(() => {
+    if (coords && selectedService && user && user.role === "CUSTOMER") {
       loadNearbyWorkers();
     } else if (!user) {
       setWorkers([]);
@@ -130,43 +179,38 @@ export default function HomeScreen() {
     }
   }
 
+  const handleUpdateWorkerStatus = async (workerId: string, status: "APPROVED" | "REJECTED") => {
+    setActionLoadingId(workerId);
+    try {
+      const res = await api.put(`/admin/workers/${workerId}/approval`, { status });
+      Alert.alert("Status Updated", res.data?.message || `Worker ${status}.`);
+      loadAdminDashboardData();
+    } catch (err: any) {
+      Alert.alert("Error", err.response?.data?.message || "Failed to update worker.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     requestDeviceLocation();
-    if (user) {
+    if (user?.role === "ADMIN") {
+      loadAdminDashboardData();
+    } else if (user?.role === "CUSTOMER") {
       loadNearbyWorkers();
     } else {
       setRefreshing(false);
     }
   };
 
+  const pendingWorkers = adminWorkers.filter((w) => w.verification_status === "PENDING");
+
   return (
     <ScrollView
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#075c31" />}
     >
-      {/* Role Banner if Worker or Admin */}
-      {user?.role === "WORKER" && (
-        <Pressable
-          style={({ pressed }) => [styles.roleBanner, pressed && { opacity: 0.85 }]}
-          onPress={() => router.push("/worker-portal")}
-        >
-          <Ionicons name="briefcase" size={18} color="#ffffff" />
-          <Text style={styles.roleBannerText}>Switch to Worker Workspace</Text>
-          <Ionicons name="chevron-forward" size={16} color="#ffffff" />
-        </Pressable>
-      )}
-      {user?.role === "ADMIN" && (
-        <Pressable
-          style={({ pressed }) => [styles.roleBanner, { backgroundColor: "#064a28" }, pressed && { opacity: 0.85 }]}
-          onPress={() => router.push("/admin-portal")}
-        >
-          <Ionicons name="shield-checkmark" size={18} color="#ffffff" />
-          <Text style={styles.roleBannerText}>Open Admin Security & Audit Center</Text>
-          <Ionicons name="chevron-forward" size={16} color="#ffffff" />
-        </Pressable>
-      )}
-
       {/* GPS Location Bar */}
       <View style={styles.locationCard}>
         <View style={styles.locationInfo}>
@@ -184,7 +228,9 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      {/* ── UNHEALTHY / GUEST VIEW (Matches website HomePage.jsx) ── */}
+      {/* ─────────────────────────────────────────────────────────────
+          1. UNHEALTHY / GUEST VIEW (Matches website HomePage.jsx)
+          ───────────────────────────────────────────────────────────── */}
       {!user ? (
         <View style={styles.guestSection}>
           <Text style={styles.eyebrow}>RELIABLE HOME SERVICES</Text>
@@ -285,11 +331,210 @@ export default function HomeScreen() {
             <Text style={styles.footerCredit}>Crafted by Ravi Ranjan Kumar</Text>
           </View>
         </View>
+      ) : user.role === "ADMIN" ? (
+        /* ─────────────────────────────────────────────────────────────
+            2. ADMINISTRATOR DASHBOARD (Matches website AdminDashboard.jsx)
+            ───────────────────────────────────────────────────────────── */
+        <View>
+          <Text style={styles.eyebrow}>ADMINISTRATOR</Text>
+          <Text style={styles.heroHeading}>Welcome, {user.name || "Admin"}</Text>
+          <Text style={styles.heroSubtitle}>
+            Review service professionals, monitor registrations by service, and keep customers safe.
+          </Text>
+
+          {/* 4 Summary Cards matching website's .admin-summary-grid */}
+          <View style={styles.adminSummaryGrid}>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryCardIcon}>👷</Text>
+              <Text style={styles.summaryCardVal}>{adminSummary.total_workers}</Text>
+              <Text style={styles.summaryCardTitle}>Total Workers</Text>
+            </View>
+
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryCardIcon}>⌛</Text>
+              <Text style={[styles.summaryCardVal, { color: "#d97706" }]}>{adminSummary.pending_workers}</Text>
+              <Text style={styles.summaryCardTitle}>Pending Approval</Text>
+            </View>
+
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryCardIcon}>✅</Text>
+              <Text style={[styles.summaryCardVal, { color: "#059669" }]}>{adminSummary.approved_workers}</Text>
+              <Text style={styles.summaryCardTitle}>Approved</Text>
+            </View>
+
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryCardIcon}>⛔</Text>
+              <Text style={[styles.summaryCardVal, { color: "#dc2626" }]}>{adminSummary.rejected_workers}</Text>
+              <Text style={styles.summaryCardTitle}>Rejected</Text>
+            </View>
+          </View>
+
+          {/* Quick Access to STRIDE Security Center & Exact GPS Logs */}
+          <Pressable
+            style={({ pressed }) => [styles.securityBannerCard, pressed && { opacity: 0.9 }]}
+            onPress={() => router.push("/admin-portal")}
+          >
+            <View style={styles.securityBannerLeft}>
+              <View style={styles.shieldIconCircle}>
+                <Ionicons name="shield-checkmark" size={24} color="#ffffff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.securityBannerTitle}>STRIDE & DREAD Security Center</Text>
+                <Text style={styles.securityBannerSubtitle}>
+                  Trace Layer 1 IPs & open Layer 2 Real Device GPS pinpoints in Google Maps
+                </Text>
+              </View>
+            </View>
+            <View style={styles.securityBannerArrow}>
+              <Ionicons name="chevron-forward" size={18} color="#075c31" />
+            </View>
+          </Pressable>
+
+          {/* Pending Worker Applications Section */}
+          <View style={styles.sectionHeaderBlock}>
+            <Text style={styles.eyebrow}>VERIFICATION MANAGEMENT</Text>
+            <Text style={styles.sectionHeading}>Pending Worker Applications</Text>
+            <Text style={styles.sectionSubtitleText}>
+              Verify technician credentials and activate their accounts for dispatch.
+            </Text>
+          </View>
+
+          {pendingWorkers.length === 0 ? (
+            <View style={styles.emptyCardContainer}>
+              <Ionicons name="checkmark-circle-outline" size={36} color="#059669" />
+              <Text style={styles.emptyCardTitleText}>No Pending Applications</Text>
+              <Text style={styles.emptyCardSubText}>All worker registrations are verified and up to date.</Text>
+            </View>
+          ) : (
+            pendingWorkers.map((w) => (
+              <View key={w.id} style={styles.workerManageCard}>
+                <View style={styles.workerCardTop}>
+                  <View style={styles.workerAvatar}>
+                    <Text style={styles.workerAvatarText}>{w.name ? w.name[0].toUpperCase() : "W"}</Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.workerNameText}>{w.name}</Text>
+                    <Text style={styles.workerMetaText}>{w.email} • {w.phone}</Text>
+                    <Text style={styles.workerServiceText}>
+                      Services: {w.services?.join(", ") || "General Home Service"}
+                    </Text>
+                  </View>
+                  <View style={styles.pendingBadge}>
+                    <Text style={styles.pendingBadgeText}>PENDING</Text>
+                  </View>
+                </View>
+
+                {w.description && (
+                  <Text style={styles.workerBioText}>"{w.description}"</Text>
+                )}
+
+                <View style={styles.actionButtonsRow}>
+                  <Pressable
+                    style={({ pressed }) => [styles.btnReject, pressed && styles.btnRejectHover]}
+                    onPress={() => handleUpdateWorkerStatus(w.id, "REJECTED")}
+                    disabled={actionLoadingId === w.id}
+                  >
+                    <Text style={styles.btnRejectText}>Reject</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={({ pressed }) => [styles.btnApprove, pressed && styles.btnApproveHover]}
+                    onPress={() => handleUpdateWorkerStatus(w.id, "APPROVED")}
+                    disabled={actionLoadingId === w.id}
+                  >
+                    <Text style={styles.btnApproveText}>Approve Worker</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))
+          )}
+
+          {/* Service Overview: Registered workers by service */}
+          <View style={styles.sectionHeaderBlock}>
+            <Text style={styles.eyebrow}>SERVICE OVERVIEW</Text>
+            <Text style={styles.sectionHeading}>Registered Workers by Service</Text>
+            <Text style={styles.sectionSubtitleText}>Distribution of technicians across categories.</Text>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.serviceCountsScroll}>
+            {adminServiceCounts.map((s) => (
+              <View key={s.id || s.name} style={styles.serviceCountCard}>
+                <Text style={{ fontSize: 24, marginBottom: 6 }}>{getCategoryEmoji(s.name)}</Text>
+                <Text style={styles.serviceCountName}>{s.name}</Text>
+                <Text style={styles.serviceCountTotal}>{s.total_workers || 0} Registered</Text>
+                <Text style={styles.serviceCountBreakdown}>
+                  {s.approved_workers || 0} approved • {s.pending_workers || 0} pending
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+
+          {/* All Registered Workers Directory */}
+          <View style={styles.sectionHeaderBlock}>
+            <Text style={styles.eyebrow}>WORKER DIRECTORY</Text>
+            <Text style={styles.sectionHeading}>All Registered Workers</Text>
+            <Text style={styles.sectionSubtitleText}>
+              Showing {adminWorkers.length} registered service providers.
+            </Text>
+          </View>
+
+          {adminWorkers.map((w) => {
+            const isApproved = w.verification_status === "APPROVED";
+            return (
+              <View key={w.id} style={styles.workerDirectoryCard}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={styles.workerNameText}>{w.name}</Text>
+                  <View style={[styles.statusTag, isApproved ? styles.statusTagApproved : styles.statusTagPending]}>
+                    <Text style={[styles.statusTagText, isApproved ? styles.statusTagTextApproved : styles.statusTagTextPending]}>
+                      {w.verification_status}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.workerMetaText}>{w.email} • {w.phone}</Text>
+                <Text style={styles.workerServiceText}>
+                  {w.services?.join(", ") || "Home Service"} • {w.experience_years || 1} yrs exp
+                </Text>
+
+                {isApproved && (
+                  <Pressable
+                    style={({ pressed }) => [styles.btnTakeOffline, pressed && { backgroundColor: "#fee2e2" }]}
+                    onPress={() => handleUpdateWorkerStatus(w.id, "REJECTED")}
+                    disabled={actionLoadingId === w.id}
+                  >
+                    <Ionicons name="ban-outline" size={13} color="#dc2626" />
+                    <Text style={styles.btnTakeOfflineText}>Take Offline (Reject)</Text>
+                  </Pressable>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      ) : user.role === "WORKER" ? (
+        /* ─────────────────────────────────────────────────────────────
+            3. WORKER VIEW
+            ───────────────────────────────────────────────────────────── */
+        <View style={styles.workerRedirectCard}>
+          <View style={styles.serviceIconBox}>
+            <Text style={{ fontSize: 26 }}>👷</Text>
+          </View>
+          <Text style={styles.cardHeading}>Worker Workspace</Text>
+          <Text style={styles.cardBody}>
+            Manage incoming customer booking requests, toggle online availability, and broadcast your live GPS.
+          </Text>
+          <Pressable
+            style={({ pressed }) => [styles.btnPrimary, pressed && styles.btnPrimaryHover]}
+            onPress={() => router.push("/worker-portal")}
+          >
+            <Text style={styles.btnPrimaryText}>Open Worker Workspace</Text>
+          </Pressable>
+        </View>
       ) : (
-        /* ── AUTHENTICATED CUSTOMER DASHBOARD (Matches CustomerDashboard.jsx) ── */
+        /* ─────────────────────────────────────────────────────────────
+            4. AUTHENTICATED CUSTOMER DASHBOARD (Matches CustomerDashboard.jsx)
+            ───────────────────────────────────────────────────────────── */
         <View>
           <Text style={styles.eyebrow}>CUSTOMER DASHBOARD</Text>
-          <Text style={styles.heroHeading}>Welcome, {user?.name || "Customer"}</Text>
+          <Text style={styles.heroHeading}>Welcome, {user.name || "Customer"}</Text>
           <Text style={styles.heroSubtitle}>
             Find verified professionals near your current location.
           </Text>
@@ -452,22 +697,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#effaf3",
     padding: 16,
   },
-  roleBanner: {
-    backgroundColor: "#075c31",
-    borderRadius: 10,
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  roleBannerText: {
-    color: "#ffffff",
-    fontWeight: "700",
-    fontSize: 13,
-    flex: 1,
-    marginHorizontal: 8,
-  },
   locationCard: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
@@ -493,9 +722,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginLeft: 8,
   },
-  guestSection: {
-    marginTop: 4,
-  },
+  guestSection: { marginTop: 4 },
   eyebrow: {
     color: "#08713d",
     fontSize: 11,
@@ -517,14 +744,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 20,
   },
-  heroActionRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 24,
-  },
-  heroActionBtn: {
-    flex: 1,
-  },
+  heroActionRow: { flexDirection: "row", gap: 12, marginBottom: 24 },
+  heroActionBtn: { flex: 1 },
   popularCard: {
     backgroundColor: "#ffffff",
     borderRadius: 20,
@@ -538,12 +759,7 @@ const styles = StyleSheet.create({
     elevation: 3,
     marginBottom: 24,
   },
-  cardSectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#102a1c",
-    marginBottom: 16,
-  },
+  cardSectionTitle: { fontSize: 18, fontWeight: "800", color: "#102a1c", marginBottom: 16 },
   quickServiceRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -560,19 +776,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  quickServiceTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#102a1c",
-  },
-  quickServiceText: {
-    fontSize: 12,
-    color: "#61726a",
-    marginTop: 2,
-  },
-  processSection: {
-    marginVertical: 12,
-  },
+  quickServiceTitle: { fontSize: 14, fontWeight: "700", color: "#102a1c" },
+  quickServiceText: { fontSize: 12, color: "#61726a", marginTop: 2 },
+  processSection: { marginVertical: 12 },
   processCard: {
     backgroundColor: "#ffffff",
     borderRadius: 16,
@@ -595,22 +801,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 10,
   },
-  stepNumberText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#075c31",
-  },
-  processStepTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#102a1c",
-    marginBottom: 4,
-  },
-  processStepDesc: {
-    fontSize: 13,
-    color: "#61726a",
-    lineHeight: 18,
-  },
+  stepNumberText: { fontSize: 16, fontWeight: "800", color: "#075c31" },
+  processStepTitle: { fontSize: 15, fontWeight: "700", color: "#102a1c", marginBottom: 4 },
+  processStepDesc: { fontSize: 13, color: "#61726a", lineHeight: 18 },
   workerCalloutCard: {
     backgroundColor: "#ffffff",
     borderRadius: 20,
@@ -624,18 +817,8 @@ const styles = StyleSheet.create({
     elevation: 3,
     marginVertical: 12,
   },
-  workerCalloutTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#102a1c",
-    marginVertical: 6,
-  },
-  workerCalloutText: {
-    fontSize: 13,
-    color: "#61726a",
-    lineHeight: 19,
-    marginBottom: 16,
-  },
+  workerCalloutTitle: { fontSize: 20, fontWeight: "800", color: "#102a1c", marginVertical: 6 },
+  workerCalloutText: { fontSize: 13, color: "#61726a", lineHeight: 19, marginBottom: 16 },
   siteFooter: {
     marginTop: 24,
     paddingVertical: 20,
@@ -644,17 +827,180 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
   },
-  footerText: {
-    color: "#d6e5d8",
-    fontSize: 12,
-    textAlign: "center",
+  footerText: { color: "#d6e5d8", fontSize: 12, textAlign: "center" },
+  footerCredit: { color: "#a9cbb0", fontSize: 11, marginTop: 4, textAlign: "center" },
+
+  // ── Admin Dashboard Styles ──
+  adminSummaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 16,
   },
-  footerCredit: {
-    color: "#a9cbb0",
-    fontSize: 11,
-    marginTop: 4,
-    textAlign: "center",
+  summaryCard: {
+    flex: 1,
+    minWidth: "45%",
+    backgroundColor: "#ffffff",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(151,190,160,0.5)",
+    shadowColor: "#114236",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
   },
+  summaryCardIcon: { fontSize: 22, marginBottom: 6 },
+  summaryCardVal: { fontSize: 24, fontWeight: "800", color: "#102a1c" },
+  summaryCardTitle: { fontSize: 11, color: "#61726a", fontWeight: "700", marginTop: 2 },
+  securityBannerCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#075c31",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+    shadowColor: "#075c31",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  securityBannerLeft: { flexDirection: "row", alignItems: "center", flex: 1, gap: 12 },
+  shieldIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  securityBannerTitle: { color: "#ffffff", fontSize: 14, fontWeight: "800" },
+  securityBannerSubtitle: { color: "#d6e5d8", fontSize: 11, marginTop: 2, lineHeight: 15 },
+  securityBannerArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
+  sectionHeaderBlock: { marginTop: 14, marginBottom: 8 },
+  sectionHeading: { fontSize: 19, fontWeight: "800", color: "#102a1c", marginBottom: 2 },
+  sectionSubtitleText: { fontSize: 12, color: "#61726a", marginBottom: 10 },
+  emptyCardContainer: {
+    backgroundColor: "#ffffff",
+    borderRadius: 14,
+    padding: 20,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e1e8e3",
+    marginBottom: 16,
+  },
+  emptyCardTitleText: { fontSize: 14, fontWeight: "700", color: "#102a1c", marginTop: 6 },
+  emptyCardSubText: { fontSize: 12, color: "#61726a", marginTop: 2, textAlign: "center" },
+  workerManageCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(151,190,160,0.5)",
+    marginBottom: 12,
+    shadowColor: "#114236",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    elevation: 2,
+  },
+  workerCardTop: { flexDirection: "row", alignItems: "center" },
+  workerNameText: { fontSize: 15, fontWeight: "700", color: "#102a1c" },
+  workerMetaText: { fontSize: 12, color: "#61726a", marginTop: 2 },
+  workerServiceText: { fontSize: 12, color: "#075c31", fontWeight: "600", marginTop: 2 },
+  pendingBadge: {
+    backgroundColor: "#fff3cf",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  pendingBadgeText: { color: "#8b5c00", fontSize: 10, fontWeight: "800" },
+  workerBioText: { fontSize: 12, color: "#475569", fontStyle: "italic", marginTop: 8 },
+  actionButtonsRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  btnReject: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#dba2a2",
+    alignItems: "center",
+  },
+  btnRejectHover: { backgroundColor: "#fee2e2" },
+  btnRejectText: { color: "#dc2626", fontWeight: "700", fontSize: 13 },
+  btnApprove: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: "#075c31",
+    alignItems: "center",
+  },
+  btnApproveHover: { backgroundColor: "#064a28" },
+  btnApproveText: { color: "#ffffff", fontWeight: "800", fontSize: 13 },
+  serviceCountsScroll: { gap: 10, paddingBottom: 10 },
+  serviceCountCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 14,
+    padding: 14,
+    minWidth: 130,
+    borderWidth: 1,
+    borderColor: "#e1e8e3",
+  },
+  serviceCountName: { fontSize: 13, fontWeight: "700", color: "#102a1c" },
+  serviceCountTotal: { fontSize: 12, color: "#075c31", fontWeight: "700", marginTop: 4 },
+  serviceCountBreakdown: { fontSize: 10, color: "#61726a", marginTop: 2 },
+  workerDirectoryCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#e1e8e3",
+    marginBottom: 8,
+  },
+  statusTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
+  statusTagApproved: { backgroundColor: "#ddf2e4" },
+  statusTagPending: { backgroundColor: "#fff3cf" },
+  statusTagText: { fontSize: 10, fontWeight: "800" },
+  statusTagTextApproved: { color: "#076332" },
+  statusTagTextPending: { color: "#8b5c00" },
+  btnTakeOffline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#fca5a5",
+  },
+  btnTakeOfflineText: { fontSize: 11, color: "#dc2626", fontWeight: "600" },
+
+  // ── Worker view ──
+  workerRedirectCard: {
+    padding: 24,
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#e1e8e3",
+    marginTop: 8,
+  },
+  cardHeading: { fontSize: 18, fontWeight: "800", color: "#102a1c", marginTop: 10, marginBottom: 6 },
+  cardBody: { fontSize: 13, color: "#61726a", lineHeight: 19, marginBottom: 16 },
+
+  // ── Customer View Styles ──
   dashboardSearchCard: {
     backgroundColor: "#ffffff",
     borderRadius: 20,
@@ -668,32 +1014,11 @@ const styles = StyleSheet.create({
     elevation: 3,
     marginBottom: 20,
   },
-  searchCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  searchCardTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#102a1c",
-  },
-  searchCardSubtitle: {
-    fontSize: 12,
-    color: "#61726a",
-    marginTop: 2,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#234534",
-    marginBottom: 8,
-    marginTop: 10,
-  },
-  categoryScroll: {
-    paddingBottom: 8,
-    gap: 8,
-  },
+  searchCardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
+  searchCardTitle: { fontSize: 18, fontWeight: "800", color: "#102a1c" },
+  searchCardSubtitle: { fontSize: 12, color: "#61726a", marginTop: 2 },
+  fieldLabel: { fontSize: 13, fontWeight: "700", color: "#234534", marginBottom: 8, marginTop: 10 },
+  categoryScroll: { paddingBottom: 8, gap: 8 },
   serviceCard: {
     backgroundColor: "#ffffff",
     borderWidth: 1,
@@ -703,20 +1028,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     minWidth: 92,
     marginRight: 8,
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 1,
   },
-  serviceCardActive: {
-    borderColor: "#075c31",
-    backgroundColor: "#f7fcf8",
-    borderWidth: 1.5,
-  },
-  serviceCardHover: {
-    borderColor: "#78ad87",
-  },
+  serviceCardActive: { borderColor: "#075c31", backgroundColor: "#f7fcf8", borderWidth: 1.5 },
+  serviceCardHover: { borderColor: "#78ad87" },
   serviceIconBox: {
     width: 48,
     height: 48,
@@ -734,28 +1048,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 6,
   },
-  serviceIconBoxActive: {
-    backgroundColor: "#cfeeda",
-  },
-  serviceEmoji: {
-    fontSize: 22,
-  },
-  serviceEmojiSmall: {
-    fontSize: 20,
-  },
-  serviceCardText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#234534",
-    textAlign: "center",
-  },
-  serviceCardTextActive: {
-    color: "#075c31",
-  },
-  radiusBtns: {
-    flexDirection: "row",
-    gap: 8,
-  },
+  serviceIconBoxActive: { backgroundColor: "#cfeeda" },
+  serviceEmoji: { fontSize: 22 },
+  serviceEmojiSmall: { fontSize: 20 },
+  serviceCardText: { fontSize: 12, fontWeight: "700", color: "#234534", textAlign: "center" },
+  serviceCardTextActive: { color: "#075c31" },
+  radiusBtns: { flexDirection: "row", gap: 8 },
   radiusBtn: {
     flex: 1,
     backgroundColor: "#f1f5f9",
@@ -765,18 +1063,9 @@ const styles = StyleSheet.create({
     borderColor: "#e1e8e3",
     alignItems: "center",
   },
-  radiusBtnActive: {
-    backgroundColor: "#075c31",
-    borderColor: "#075c31",
-  },
-  radiusBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#475569",
-  },
-  radiusBtnTextActive: {
-    color: "#ffffff",
-  },
+  radiusBtnActive: { backgroundColor: "#075c31", borderColor: "#075c31" },
+  radiusBtnText: { fontSize: 13, fontWeight: "700", color: "#475569" },
+  radiusBtnTextActive: { color: "#ffffff" },
   btnPrimary: {
     alignItems: "center",
     justifyContent: "center",
@@ -787,17 +1076,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
   },
-  btnPrimaryHover: {
-    backgroundColor: "#064a28",
-  },
-  btnDisabled: {
-    opacity: 0.65,
-  },
-  btnPrimaryText: {
-    color: "#ffffff",
-    fontWeight: "800",
-    fontSize: 14,
-  },
+  btnPrimaryHover: { backgroundColor: "#064a28" },
+  btnDisabled: { opacity: 0.65 },
+  btnPrimaryText: { color: "#ffffff", fontWeight: "800", fontSize: 14 },
   btnOutline: {
     alignItems: "center",
     justifyContent: "center",
@@ -808,30 +1089,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#075c31",
   },
-  btnOutlineText: {
-    color: "#075c31",
-    fontWeight: "800",
-    fontSize: 14,
-  },
-  workerResultsHeader: {
-    marginTop: 10,
-    marginBottom: 8,
-  },
-  sectionHeading: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#102a1c",
-    marginBottom: 4,
-  },
-  loadingBox: {
-    padding: 36,
-    alignItems: "center",
-  },
-  mutedText: {
-    color: "#61726a",
-    fontSize: 13,
-    marginTop: 10,
-  },
+  btnOutlineText: { color: "#075c31", fontWeight: "800", fontSize: 14 },
+  workerResultsHeader: { marginTop: 10, marginBottom: 8 },
+  loadingBox: { padding: 36, alignItems: "center" },
+  mutedText: { color: "#61726a", fontSize: 13, marginTop: 10 },
   emptyWorkerCard: {
     backgroundColor: "#ffffff",
     borderRadius: 16,
@@ -841,18 +1102,8 @@ const styles = StyleSheet.create({
     borderColor: "#e1e8e3",
     marginTop: 8,
   },
-  emptyWorkerTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#102a1c",
-    marginTop: 8,
-  },
-  emptyWorkerDesc: {
-    fontSize: 13,
-    color: "#61726a",
-    textAlign: "center",
-    marginTop: 4,
-  },
+  emptyWorkerTitle: { fontSize: 16, fontWeight: "700", color: "#102a1c", marginTop: 8 },
+  emptyWorkerDesc: { fontSize: 13, color: "#61726a", textAlign: "center", marginTop: 4 },
   workerCard: {
     flexDirection: "row",
     gap: 14,
@@ -868,11 +1119,7 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 2,
   },
-  workerCardHover: {
-    borderColor: "#78ad87",
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.12,
-  },
+  workerCardHover: { borderColor: "#78ad87", shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.12 },
   workerAvatar: {
     width: 48,
     height: 48,
@@ -881,25 +1128,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  workerAvatarText: {
-    color: "#075c31",
-    fontSize: 20,
-    fontWeight: "800",
-  },
-  workerCardBody: {
-    flex: 1,
-  },
-  workerName: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#102a1c",
-    marginBottom: 4,
-  },
-  workerMeta: {
-    fontSize: 13,
-    color: "#61726a",
-    marginBottom: 3,
-  },
+  workerAvatarText: { color: "#075c31", fontSize: 20, fontWeight: "800" },
+  workerCardBody: { flex: 1 },
+  workerName: { fontSize: 16, fontWeight: "700", color: "#102a1c", marginBottom: 4 },
+  workerMeta: { fontSize: 13, color: "#61726a", marginBottom: 3 },
   availableBadge: {
     alignSelf: "flex-start",
     marginTop: 6,
@@ -909,15 +1141,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#ddf2e4",
     borderRadius: 999,
   },
-  availableBadgeText: {
-    color: "#076332",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  bookingAction: {
-    marginTop: 6,
-    alignSelf: "flex-start",
-    paddingHorizontal: 16,
-    minHeight: 38,
-  },
+  availableBadgeText: { color: "#076332", fontSize: 11, fontWeight: "800" },
+  bookingAction: { marginTop: 6, alignSelf: "flex-start", paddingHorizontal: 16, minHeight: 38 },
 });
