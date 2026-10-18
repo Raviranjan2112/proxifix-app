@@ -92,7 +92,7 @@ export default function ProfileScreen() {
               <Ionicons name="briefcase" size={20} color="#075c31" />
             </View>
             <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>Worker Workspace</Text>
+              <Text style={styles.menuTitle}>Worker Dashboard</Text>
               <Text style={styles.menuSubtitle}>Manage incoming jobs, online toggle & live GPS</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />

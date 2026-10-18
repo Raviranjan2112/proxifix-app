@@ -578,7 +578,7 @@ export default function BookingsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#075c31" />}
       >
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>WORKER WORKSPACE</Text>
+          <Text style={styles.eyebrow}>WORKER DASHBOARD</Text>
           <Text style={styles.title}>Service Jobs & Requests</Text>
           <Text style={styles.subtitle}>
             Incoming customer appointments and active work requests.
@@ -589,7 +589,7 @@ export default function BookingsScreen() {
           <View style={styles.guestIconBox}>
             <Ionicons name="briefcase" size={32} color="#075c31" />
           </View>
-          <Text style={styles.emptyTitle}>Manage Jobs in Worker Portal</Text>
+          <Text style={styles.emptyTitle}>Manage Jobs in Worker Dashboard</Text>
           <Text style={styles.emptyText}>
             Accept new customer requests, update your live availability status, and mark jobs as completed.
           </Text>
@@ -597,7 +597,7 @@ export default function BookingsScreen() {
             style={({ pressed }) => [styles.btnPrimary, { marginTop: 16 }, pressed && styles.btnPrimaryHover]}
             onPress={() => router.push("/worker-portal")}
           >
-            <Text style={styles.btnPrimaryText}>Open Worker Workspace</Text>
+            <Text style={styles.btnPrimaryText}>Open Worker Dashboard</Text>
           </Pressable>
         </View>
       </ScrollView>

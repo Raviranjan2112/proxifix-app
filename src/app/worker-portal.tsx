@@ -32,8 +32,11 @@ export default function WorkerPortalScreen() {
         api.get("/workers/me"),
         api.get("/bookings"),
       ]);
-      if (profRes.data?.success) {
-        setIsOnline(profRes.data.worker.online_status === true || profRes.data.worker.online_status === "ONLINE");
+      if (profRes.data?.success && profRes.data.worker) {
+        const w = profRes.data.worker;
+        const online = w.onlineStatus ?? w.online_status;
+        const avail = w.availabilityStatus ?? w.availability_status;
+        setIsOnline(online === true || online === "ONLINE" || avail === "AVAILABLE");
       }
       if (bookRes.data?.success) setBookings(bookRes.data.bookings || []);
     } catch (err: any) {
@@ -47,19 +50,29 @@ export default function WorkerPortalScreen() {
   const handleToggleOnline = async (value: boolean) => {
     setIsOnline(value);
     try {
-      let lat: number | undefined, lon: number | undefined;
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === "granted") {
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        lat = loc.coords.latitude;
-        lon = loc.coords.longitude;
+      let lat = 23.2599;
+      let lon = 77.4126;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          lat = loc.coords.latitude;
+          lon = loc.coords.longitude;
+        }
+      } catch (locErr) {
+        console.warn("Location fetch note:", locErr);
       }
+
       await api.put("/workers/status", {
         onlineStatus: value,
         availabilityStatus: value ? "AVAILABLE" : "OFFLINE",
-        ...(lat && lon ? { latitude: lat, longitude: lon } : {}),
+        latitude: lat,
+        longitude: lon,
       });
-      if (value && lat && lon) await api.put("/workers/location", { latitude: lat, longitude: lon });
+
+      if (value) {
+        await api.put("/workers/location", { latitude: lat, longitude: lon });
+      }
     } catch (err: any) {
       Alert.alert("Status Error", err.response?.data?.message || "Failed to update status.");
       setIsOnline(!value);
@@ -81,9 +94,9 @@ export default function WorkerPortalScreen() {
     }
   };
 
-  const pending = bookings.filter((b) => b.status === "PENDING").length;
-  const active = bookings.filter((b) => ["IN_PROGRESS", "ACCEPTED"].includes(b.status)).length;
-  const completed = bookings.filter((b) => b.status === "COMPLETED").length;
+  const pending = bookings.filter((b) => (b.booking_status || b.status) === "PENDING").length;
+  const active = bookings.filter((b) => ["IN_PROGRESS", "ACCEPTED", "ARRIVING", "STARTED"].includes(b.booking_status || b.status)).length;
+  const completed = bookings.filter((b) => (b.booking_status || b.status) === "COMPLETED").length;
 
   return (
     <ScrollView

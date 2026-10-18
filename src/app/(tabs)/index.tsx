@@ -517,7 +517,7 @@ export default function HomeScreen() {
           <View style={styles.serviceIconBox}>
             <Text style={{ fontSize: 26 }}>👷</Text>
           </View>
-          <Text style={styles.cardHeading}>Worker Workspace</Text>
+          <Text style={styles.cardHeading}>Worker Dashboard</Text>
           <Text style={styles.cardBody}>
             Manage incoming customer booking requests, toggle online availability, and broadcast your live GPS.
           </Text>
@@ -525,7 +525,7 @@ export default function HomeScreen() {
             style={({ pressed }) => [styles.btnPrimary, pressed && styles.btnPrimaryHover]}
             onPress={() => router.push("/worker-portal")}
           >
-            <Text style={styles.btnPrimaryText}>Open Worker Workspace</Text>
+            <Text style={styles.btnPrimaryText}>Open Worker Dashboard</Text>
           </Pressable>
         </View>
       ) : (

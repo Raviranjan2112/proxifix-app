@@ -45,7 +45,7 @@ export default function RootLayout() {
         <Stack.Screen
           name="worker-portal"
           options={{
-            title: "Worker Workspace",
+            title: "Worker Dashboard",
           }}
         />
         <Stack.Screen
