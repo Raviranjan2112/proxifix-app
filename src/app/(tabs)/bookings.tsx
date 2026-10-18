@@ -16,6 +16,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { C, RADIUS, SHADOW } from "../../constants/theme";
 
 function formatLogDetails(details: any): string {
   if (!details) return "";
@@ -25,7 +26,7 @@ function formatLogDetails(details: any): string {
       if (typeof parsed === "object" && parsed !== null) {
         return Object.entries(parsed)
           .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`)
-          .join(", ");
+          .join(" | ");
       }
     } catch {
       return details;
@@ -36,13 +37,32 @@ function formatLogDetails(details: any): string {
     try {
       return Object.entries(details)
         .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`)
-        .join(", ");
+        .join(" | ");
     } catch {
       return JSON.stringify(details);
     }
   }
   return String(details);
 }
+
+const STRIDE_VECTORS = [
+  { code: "ALL", label: "ALL VECTORS", color: C.slate700, bg: C.slate100 },
+  { code: "S", label: "[S] Spoofing", color: "#0369a1", bg: "#e0f2fe" },
+  { code: "T", label: "[T] Tampering", color: "#c2410c", bg: "#ffedd5" },
+  { code: "R", label: "[R] Repudiation", color: "#7e22ce", bg: "#f3e8ff" },
+  { code: "I", label: "[I] Disclosure", color: "#047857", bg: "#ecfdf5" },
+  { code: "D", label: "[D] Denial of Service", color: "#b91c1c", bg: "#fee2e2" },
+  { code: "E", label: "[E] Elevation", color: "#be185d", bg: "#fdf2f8" },
+];
+
+const STRIDE_MATRIX = [
+  { code: "S", name: "Spoofing", threat: "Technician & Customer Impersonation", mitigation: "Hardware GPS Pinpointing & HMAC Token Authentication", score: "0.9" },
+  { code: "T", name: "Tampering", threat: "Unauthorized Rate & Coordinate Modification", mitigation: "Cryptographic Payload Signatures & Server-side Validation", score: "1.1" },
+  { code: "R", name: "Repudiation", threat: "Denial of Job Completion or Payment", mitigation: "Immutable SQLite Non-Repudiation Audit Trail", score: "0.8" },
+  { code: "I", name: "Information Disclosure", threat: "Customer Geolocation Exposure", mitigation: "Geofence Obfuscation & Role-Based Data Isolation", score: "1.3" },
+  { code: "D", name: "Denial of Service", threat: "Automated Search Rate Spikes", mitigation: "Sliding-Window Rate Limiter (60 req/min/IP)", score: "1.0" },
+  { code: "E", name: "Elevation of Privilege", threat: "Unauthorized Role Transition", mitigation: "Strict Role-Guard Middleware with DB Re-Verification", score: "0.7" },
+];
 
 export default function BookingsScreen() {
   const router = useRouter();
@@ -53,13 +73,17 @@ export default function BookingsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Admin Security & Audit Center State
+  // Admin Security Center State
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("ALL");
-  const [adminTab, setAdminTab] = useState<"logs" | "threats">("logs");
+  const [selectedVector, setSelectedVector] = useState("ALL");
+  const [adminViewMode, setAdminViewMode] = useState<"stream" | "matrix">("stream");
 
-  // IP & Device GPS Tracing Modal State (Layer 1 & Layer 2)
+  // Accordion State
+  const [expandedLogs, setExpandedLogs] = useState<{ [id: string]: boolean }>({});
+  const [expandedBookings, setExpandedBookings] = useState<{ [id: string]: boolean }>({});
+
+  // Layer 1 & Layer 2 Tracing Modal State
   const [ipModalVisible, setIpModalVisible] = useState(false);
   const [selectedIp, setSelectedIp] = useState<string | null>(null);
   const [ipLoading, setIpLoading] = useState(false);
@@ -81,9 +105,7 @@ export default function BookingsScreen() {
     setLoading(true);
     try {
       const res = await api.get("/bookings");
-      if (res.data?.success) {
-        setBookings(res.data.bookings || []);
-      }
+      if (res.data?.success) setBookings(res.data.bookings || []);
     } catch (err: any) {
       console.warn("Bookings status note:", err?.response?.data?.message || err?.message || err);
       setBookings([]);
@@ -97,11 +119,9 @@ export default function BookingsScreen() {
     setLoading(true);
     try {
       const res = await api.get("/admin/audit-logs");
-      if (res.data?.success) {
-        setAuditLogs(res.data.logs || []);
-      }
+      if (res.data?.success) setAuditLogs(res.data.logs || []);
     } catch (err: any) {
-      console.warn("Audit logs load error:", err?.response?.data?.message || err?.message || err);
+      console.warn("Audit logs error:", err?.response?.data?.message || err?.message || err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -123,17 +143,9 @@ export default function BookingsScreen() {
 
   const handleOpenMaps = (lat: number, lng: number) => {
     const url = `https://www.google.com/maps?q=${lat},${lng}`;
-    Linking.canOpenURL(url)
-      .then((supported) => {
-        if (supported) {
-          Linking.openURL(url);
-        } else {
-          Alert.alert("Exact Coordinates", `Latitude: ${lat}\nLongitude: ${lng}`);
-        }
-      })
-      .catch(() => {
-        Alert.alert("Location", `GPS Pinpoint: ${lat}, ${lng}`);
-      });
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Coordinates", `Latitude: ${lat}\nLongitude: ${lng}`);
+    });
   };
 
   const handleTraceIp = async (ip: string) => {
@@ -148,14 +160,14 @@ export default function BookingsScreen() {
       } else {
         setIpData({
           ip,
-          geo: { city: "Lookup Unavailable", isp: "Network Host", networkType: "IP Route" },
+          geo: { city: "Lookup Unavailable", isp: "Carrier Gateway", networkType: "WAN" },
           stats: { total_events: 1, users: [] },
         });
       }
     } catch {
       setIpData({
         ip,
-        geo: { city: "Private Network", isp: "Localhost Gateway", networkType: "LAN Route" },
+        geo: { city: "Private Network", isp: "Loopback Interface", networkType: "LAN" },
         stats: { total_events: 1, users: [] },
       });
     } finally {
@@ -163,23 +175,31 @@ export default function BookingsScreen() {
     }
   };
 
+  const toggleLogAccordion = (id: string) => {
+    setExpandedLogs((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleBookingAccordion = (id: string) => {
+    setExpandedBookings((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   // ─────────────────────────────────────────────────────────────
-  // 1. UNREGISTERED / GUEST VIEW
+  // 1. GUEST VIEW
   // ─────────────────────────────────────────────────────────────
   if (!user) {
     return (
       <View style={styles.centerBox}>
-        <View style={styles.guestCard}>
-          <View style={styles.guestIconBox}>
-            <Ionicons name="lock-closed" size={32} color="#075c31" />
+        <View style={styles.denseCard}>
+          <View style={styles.centerIconPill}>
+            <Ionicons name="lock-closed" size={24} color={C.brand} />
           </View>
-          <Text style={styles.eyebrow}>SIGN IN REQUIRED</Text>
-          <Text style={styles.guestTitle}>Sign in to view your account activity</Text>
-          <Text style={styles.guestSubtitle}>
-            Track active service appointments, live technician arrivals, or system security logs.
+          <Text style={styles.eyebrow}>AUTHENTICATION REQUIRED</Text>
+          <Text style={styles.heroTitle}>Sign In to Inspect Activity</Text>
+          <Text style={styles.heroSubtitle}>
+            Access active service appointments, live technician tracking, or administrative audit logs.
           </Text>
           <Pressable
-            style={({ pressed }) => [styles.btnPrimary, pressed && styles.btnPrimaryHover]}
+            style={[styles.btnPrimary, { marginTop: 14 }]}
             onPress={() => router.push("/login")}
           >
             <Text style={styles.btnPrimaryText}>Sign In / Register</Text>
@@ -190,113 +210,102 @@ export default function BookingsScreen() {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 2. ADMINISTRATOR VIEW (STRIDE Security & Audit Operations)
+  // 2. ADMINISTRATOR VIEW (STRIDE Operations & Audit Terminal)
   // ─────────────────────────────────────────────────────────────
   if (user.role === "ADMIN") {
     const filteredLogs = auditLogs.filter((log) => {
+      const q = searchQuery.toLowerCase();
       const matchesSearch =
         !searchQuery ||
-        log.user_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.action?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.ip_address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.threat_category?.toLowerCase().includes(searchQuery.toLowerCase());
+        log.user_email?.toLowerCase().includes(q) ||
+        log.action?.toLowerCase().includes(q) ||
+        log.ip_address?.toLowerCase().includes(q) ||
+        log.threat_category?.toLowerCase().includes(q);
 
-      const matchesCat =
-        categoryFilter === "ALL" ||
-        log.threat_category?.toUpperCase().includes(categoryFilter) ||
-        log.action?.toUpperCase().includes(categoryFilter);
+      const matchesVector =
+        selectedVector === "ALL" ||
+        log.threat_category?.toUpperCase() === selectedVector;
 
-      return matchesSearch && matchesCat;
+      return matchesSearch && matchesVector;
     });
 
-    const STRIDE_ITEMS = [
-      { code: "S", name: "Spoofing", threat: "User & Worker Identity Impersonation", mitigation: "Hardware GPS Pinpoint & HMAC Signed Tokens", score: "0.9" },
-      { code: "T", name: "Tampering", threat: "Location & Price Modification", mitigation: "Cryptographic Payload Signatures & Input Validation", score: "1.1" },
-      { code: "R", name: "Repudiation", threat: "Denial of Booking Actions or Payments", mitigation: "Immutable SQLite Non-Repudiation Audit Trail", score: "0.8" },
-      { code: "I", name: "Information Disclosure", threat: "Exposure of Customer GPS & Phone", mitigation: "Role-Based Data Filtering & Geofence Bounds", score: "1.3" },
-      { code: "D", name: "Denial of Service", threat: "High-Frequency API Flood", mitigation: "In-Memory Rate Limiter (60 req/min/IP)", score: "1.0" },
-      { code: "E", name: "Elevation of Privilege", threat: "Unauthorized Admin Route Escalation", mitigation: "Strict Role-Guard Middleware with DB Verification", score: "0.7" },
-    ];
-
     return (
-      <View style={{ flex: 1, backgroundColor: "#effaf3" }}>
+      <View style={{ flex: 1, backgroundColor: C.bgPage }}>
         <ScrollView
           style={styles.container}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#075c31" />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.brand} />}
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.eyebrow}>STRIDE & DREAD SECURITY CENTER</Text>
-            <Text style={styles.title}>System Audit & Security Logs</Text>
-            <Text style={styles.subtitle}>
-              Immutable audit stream, hardware GPS tracing, and non-repudiation logs.
+            <Text style={styles.eyebrow}>SECURITY OPERATIONS CENTER</Text>
+            <Text style={styles.heroTitle}>STRIDE & Audit Telemetry</Text>
+            <Text style={styles.heroSubtitle}>
+              Cryptographic non-repudiation audit trail, hardware GPS coordinates, and Layer 1/2 IP inspection.
             </Text>
           </View>
 
-          {/* Quick Metrics Cards */}
-          <View style={styles.adminStatsRow}>
-            <View style={styles.adminStatCard}>
-              <Text style={styles.adminStatLabel}>AUDIT INTEGRITY</Text>
-              <Text style={styles.adminStatValHighlight}>Active 🔒</Text>
-              <Text style={styles.adminStatSub}>Immutable SQLite logs</Text>
+          {/* High-Density KPI Row */}
+          <View style={styles.kpiRow}>
+            <View style={[styles.kpiCard, { borderLeftColor: C.brand }]}>
+              <Text style={styles.kpiLabel}>AUDIT INTEGRITY</Text>
+              <Text style={[styles.kpiValue, { color: C.brand }]}>Active 🔒</Text>
+              <Text style={styles.kpiSub}>SQLite Immutable</Text>
             </View>
 
-            <View style={styles.adminStatCard}>
-              <Text style={styles.adminStatLabel}>SYSTEM EVENTS</Text>
-              <Text style={styles.adminStatVal}>{auditLogs.length}</Text>
-              <Text style={styles.adminStatSub}>Logged actions recorded</Text>
+            <View style={[styles.kpiCard, { borderLeftColor: "#0284c7" }]}>
+              <Text style={styles.kpiLabel}>EVENT STREAM</Text>
+              <Text style={styles.kpiValue}>{auditLogs.length}</Text>
+              <Text style={styles.kpiSub}>Total records</Text>
             </View>
 
-            <View style={styles.adminStatCard}>
-              <Text style={styles.adminStatLabel}>THREAT POSTURE</Text>
-              <Text style={[styles.adminStatVal, { color: "#076332" }]}>🟢 Low Risk</Text>
-              <Text style={styles.adminStatSub}>STRIDE Controls active</Text>
+            <View style={[styles.kpiCard, { borderLeftColor: "#15803d" }]}>
+              <Text style={styles.kpiLabel}>DREAD POSTURE</Text>
+              <Text style={[styles.kpiValue, { color: "#15803d" }]}>0.9/10</Text>
+              <Text style={styles.kpiSub}>Low Risk (Secured)</Text>
             </View>
           </View>
 
-          {/* Tab Selector: Logs Stream vs STRIDE Matrix */}
+          {/* Mode Selector: Live Stream vs STRIDE Matrix */}
           <View style={styles.modeTabs}>
             <Pressable
-              style={[styles.modeTab, adminTab === "logs" && styles.modeTabActive]}
-              onPress={() => setAdminTab("logs")}
+              style={[styles.modeTab, adminViewMode === "stream" && styles.modeTabActive]}
+              onPress={() => setAdminViewMode("stream")}
             >
               <Ionicons
                 name="list"
-                size={16}
-                color={adminTab === "logs" ? "#FFFFFF" : "#475569"}
+                size={14}
+                color={adminViewMode === "stream" ? "#FFFFFF" : C.slate600}
               />
-              <Text style={[styles.modeTabText, adminTab === "logs" && styles.modeTabTextActive]}>
-                Audit Logs ({filteredLogs.length})
+              <Text style={[styles.modeTabText, adminViewMode === "stream" && styles.modeTabTextActive]}>
+                Audit Stream ({filteredLogs.length})
               </Text>
             </Pressable>
 
             <Pressable
-              style={[styles.modeTab, adminTab === "threats" && styles.modeTabActive]}
-              onPress={() => setAdminTab("threats")}
+              style={[styles.modeTab, adminViewMode === "matrix" && styles.modeTabActive]}
+              onPress={() => setAdminViewMode("matrix")}
             >
               <Ionicons
                 name="shield"
-                size={16}
-                color={adminTab === "threats" ? "#FFFFFF" : "#475569"}
+                size={14}
+                color={adminViewMode === "matrix" ? "#FFFFFF" : C.slate600}
               />
-              <Text style={[styles.modeTabText, adminTab === "threats" && styles.modeTabTextActive]}>
-                STRIDE Matrix
+              <Text style={[styles.modeTabText, adminViewMode === "matrix" && styles.modeTabTextActive]}>
+                STRIDE Matrix (6)
               </Text>
             </Pressable>
           </View>
 
-          {adminTab === "threats" ? (
-            /* STRIDE Threat Model Cards */
+          {adminViewMode === "matrix" ? (
+            /* STRIDE 6-Vector Matrix */
             <View style={{ marginBottom: 30 }}>
-              <Text style={styles.sectionSubtitle}>
-                Six-Vector Threat Mitigation Architecture & DREAD Risk Scores
+              <Text style={styles.matrixHeaderSub}>
+                Six-Vector Threat Mitigation Architecture & DREAD Vulnerability Scoring
               </Text>
 
-              {STRIDE_ITEMS.map((item) => (
+              {STRIDE_MATRIX.map((item) => (
                 <View key={item.code} style={styles.strideCard}>
-                  <View style={styles.strideHeaderRow}>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <View style={styles.strideCodeBadge}>
                       <Text style={styles.strideCodeText}>{item.code}</Text>
                     </View>
@@ -304,166 +313,166 @@ export default function BookingsScreen() {
                       <Text style={styles.strideVectorTitle}>{item.name}</Text>
                       <Text style={styles.strideThreatDesc}>{item.threat}</Text>
                     </View>
-                    <View style={styles.riskBadge}>
-                      <Text style={styles.riskBadgeText}>🟢 {item.score}/10</Text>
+                    <View style={styles.scorePill}>
+                      <Text style={styles.scorePillText}>🟢 {item.score}/10</Text>
                     </View>
                   </View>
-
                   <View style={styles.mitigationBox}>
-                    <Ionicons name="checkmark-circle" size={14} color="#076332" />
+                    <Ionicons name="checkmark-circle" size={13} color="#15803d" />
                     <Text style={styles.mitigationText}>{item.mitigation}</Text>
                   </View>
                 </View>
               ))}
             </View>
           ) : (
-            /* Audit Logs Stream */
+            /* Audit Log Stream */
             <>
-              {/* Search & Filter Bar */}
-              <View style={styles.searchBox}>
-                <Ionicons name="search" size={16} color="#61726a" />
+              {/* Search Bar */}
+              <View style={styles.searchBar}>
+                <Ionicons name="search" size={14} color={C.slate500} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Filter by email, action, IP, or threat..."
-                  placeholderTextColor="#8a9a90"
+                  placeholder="Filter by email, action, IP, or threat code..."
+                  placeholderTextColor={C.slate400}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                 />
                 {searchQuery ? (
                   <Pressable onPress={() => setSearchQuery("")}>
-                    <Ionicons name="close-circle" size={16} color="#61726a" />
+                    <Ionicons name="close-circle" size={14} color={C.slate500} />
                   </Pressable>
                 ) : null}
               </View>
 
-              {/* Category Pills */}
+              {/* STRIDE Vector Filter Pills */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                style={styles.pillScroll}
-                contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
+                style={styles.vectorPillScroll}
+                contentContainerStyle={{ gap: 6, paddingBottom: 8 }}
               >
-                {["ALL", "AUTH", "WORKER", "BOOKING", "SECURITY"].map((pill) => (
-                  <Pressable
-                    key={pill}
-                    style={[styles.catPill, categoryFilter === pill && styles.catPillActive]}
-                    onPress={() => setCategoryFilter(pill)}
-                  >
-                    <Text
+                {STRIDE_VECTORS.map((v) => {
+                  const isSelected = selectedVector === v.code;
+                  return (
+                    <Pressable
+                      key={v.code}
                       style={[
-                        styles.catPillText,
-                        categoryFilter === pill && styles.catPillTextActive,
+                        styles.vectorPill,
+                        { borderColor: isSelected ? v.color : C.border },
+                        isSelected && { backgroundColor: v.bg },
                       ]}
+                      onPress={() => setSelectedVector(v.code)}
                     >
-                      {pill}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <Text style={[styles.vectorPillText, { color: isSelected ? v.color : C.slate600 }]}>
+                        {v.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </ScrollView>
 
               {loading ? (
-                <View style={styles.centerLoading}>
-                  <ActivityIndicator size="large" color="#075c31" />
+                <View style={styles.loadingBox}>
+                  <ActivityIndicator size="large" color={C.brand} />
                   <Text style={styles.loadingText}>Streaming audit logs...</Text>
                 </View>
               ) : filteredLogs.length === 0 ? (
                 <View style={styles.emptyCard}>
-                  <Ionicons name="shield-outline" size={36} color="#075c31" />
-                  <Text style={styles.emptyTitle}>No matching audit records</Text>
-                  <Text style={styles.emptyText}>
-                    All operations are secure and monitored. Change your filter to view more logs.
-                  </Text>
+                  <Ionicons name="shield-outline" size={32} color={C.slate400} />
+                  <Text style={styles.emptyTitle}>No audit records found</Text>
+                  <Text style={styles.emptySub}>All security parameters verified. Try another filter.</Text>
                 </View>
               ) : (
                 filteredLogs.map((log) => {
+                  const isExpanded = !!expandedLogs[log.id];
                   const hasGps = log.pin_lat && log.pin_lng;
                   const isSuccess = log.status !== "FAILED";
 
                   return (
                     <View key={log.id} style={styles.auditCard}>
-                      <View style={styles.auditCardHeader}>
-                        <View style={styles.strideBadge}>
-                          <Text style={styles.strideBadgeText}>
-                            [{log.threat_category || "NON-REPUDIATION"}]
+                      {/* Compact Header */}
+                      <Pressable
+                        style={styles.auditHeader}
+                        onPress={() => toggleLogAccordion(log.id)}
+                      >
+                        <View style={styles.vectorTag}>
+                          <Text style={styles.vectorTagText}>
+                            [{log.threat_category || "R"}]
                           </Text>
                         </View>
-                        <View
-                          style={[
-                            styles.auditStatusTag,
-                            isSuccess ? styles.auditStatusSuccess : styles.auditStatusFailed,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.auditStatusTagText,
-                              isSuccess
-                                ? styles.auditStatusTagTextSuccess
-                                : styles.auditStatusTagTextFailed,
-                            ]}
-                          >
-                            {log.status || "SUCCESS"}
+
+                        <View style={{ flex: 1, marginLeft: 8 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={styles.auditAction}>{log.action}</Text>
+                            <View style={isSuccess ? styles.statusTagSuccess : styles.statusTagFailed}>
+                              <Text style={isSuccess ? styles.statusTagTextSuccess : styles.statusTagTextFailed}>
+                                {log.status || "SUCCESS"}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.auditMeta} numberOfLines={1}>
+                            {log.user_email || "Anonymous Guest"} • {new Date(log.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                           </Text>
                         </View>
-                      </View>
 
-                      <View style={styles.auditActionRow}>
-                        <Text style={styles.auditActionName}>{log.action}</Text>
-                        <Text style={styles.auditTime}>
-                          {new Date(log.created_at).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </Text>
-                      </View>
+                        <Ionicons
+                          name={isExpanded ? "chevron-up" : "chevron-down"}
+                          size={15}
+                          color={C.slate500}
+                        />
+                      </Pressable>
 
-                      <Text style={styles.auditUser}>
-                        👤 {log.user_email || "Anonymous Guest"} • Role: {log.user_role || "VISITOR"}
-                      </Text>
+                      {/* Expandable Body */}
+                      {isExpanded && (
+                        <View style={styles.auditBody}>
+                          {/* Hardware Chips Row */}
+                          <View style={styles.chipsRow}>
+                            {hasGps && (
+                              <Pressable
+                                style={styles.gpsChip}
+                                onPress={() => handleOpenMaps(log.pin_lat, log.pin_lng)}
+                              >
+                                <Ionicons name="location" size={12} color="#047857" />
+                                <Text style={styles.gpsChipText}>
+                                  📍 {Number(log.pin_lat).toFixed(4)}°, {Number(log.pin_lng).toFixed(4)}°
+                                </Text>
+                                <Ionicons name="open-outline" size={11} color="#047857" />
+                              </Pressable>
+                            )}
 
-                      {/* Hardware GPS and IP Tags */}
-                      <View style={styles.chipRow}>
-                        {hasGps ? (
-                          <Pressable
-                            style={styles.gpsChip}
-                            onPress={() => handleOpenMaps(log.pin_lat, log.pin_lng)}
-                          >
-                            <Ionicons name="location" size={12} color="#076332" />
-                            <Text style={styles.gpsChipText}>
-                              📍 {Number(log.pin_lat).toFixed(4)}, {Number(log.pin_lng).toFixed(4)} (Exact GPS)
-                            </Text>
-                          </Pressable>
-                        ) : null}
+                            {log.ip_address && (
+                              <Pressable
+                                style={styles.ipChip}
+                                onPress={() => handleTraceIp(log.ip_address)}
+                              >
+                                <Ionicons name="globe-outline" size={12} color="#0284c7" />
+                                <Text style={styles.ipChipText}>🛰️ {log.ip_address}</Text>
+                                <Ionicons name="scan-outline" size={11} color="#0284c7" />
+                              </Pressable>
+                            )}
+                          </View>
 
-                        {log.ip_address ? (
-                          <Pressable
-                            style={styles.ipChip}
-                            onPress={() => handleTraceIp(log.ip_address)}
-                          >
-                            <Ionicons name="globe-outline" size={12} color="#0284c7" />
-                            <Text style={styles.ipChipText}>🛰️ {log.ip_address}</Text>
-                          </Pressable>
-                        ) : null}
-                      </View>
+                          {/* Payload Details in Monospace Code Box */}
+                          {log.details ? (
+                            <View style={styles.payloadBox}>
+                              <Text style={styles.payloadLabel}>AUDIT PAYLOAD TELEMETRY</Text>
+                              <Text style={styles.payloadText}>
+                                {formatLogDetails(log.details)}
+                              </Text>
+                            </View>
+                          ) : null}
 
-                      {/* Direct Pinpoint Map Button */}
-                      {hasGps ? (
-                        <Pressable
-                          style={styles.btnOpenMaps}
-                          onPress={() => handleOpenMaps(log.pin_lat, log.pin_lng)}
-                        >
-                          <Ionicons name="navigate-circle" size={16} color="#075c31" />
-                          <Text style={styles.btnOpenMapsText}>
-                            Open Exact Device Pinpoint in Maps
-                          </Text>
-                          <Ionicons name="open-outline" size={13} color="#075c31" />
-                        </Pressable>
-                      ) : null}
-
-                      {log.details ? (
-                        <Text style={styles.auditDetails} numberOfLines={2}>
-                          "{formatLogDetails(log.details)}"
-                        </Text>
-                      ) : null}
+                          {hasGps && (
+                            <Pressable
+                              style={styles.btnOpenMaps}
+                              onPress={() => handleOpenMaps(log.pin_lat, log.pin_lng)}
+                            >
+                              <Ionicons name="navigate-circle" size={14} color={C.brand} />
+                              <Text style={styles.btnOpenMapsText}>Open Exact GPS Pinpoint in Maps</Text>
+                            </Pressable>
+                          )}
+                        </View>
+                      )}
                     </View>
                   );
                 })
@@ -482,84 +491,67 @@ export default function BookingsScreen() {
           onRequestClose={() => setIpModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+            <View style={styles.modalCard}>
               <View style={styles.modalHeader}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Ionicons name="shield-checkmark" size={20} color="#075c31" />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Ionicons name="shield-checkmark" size={18} color={C.brand} />
                   <Text style={styles.modalTitle}>Layer 1 & 2 Pinpoint Audit</Text>
                 </View>
-                <Pressable onPress={() => setIpModalVisible(false)} style={{ padding: 4 }}>
-                  <Ionicons name="close" size={20} color="#61726a" />
+                <Pressable onPress={() => setIpModalVisible(false)} hitSlop={8}>
+                  <Ionicons name="close" size={18} color={C.slate500} />
                 </Pressable>
               </View>
 
               {ipLoading ? (
-                <View style={{ padding: 30, alignItems: "center" }}>
-                  <ActivityIndicator size="small" color="#075c31" />
-                  <Text style={{ marginTop: 8, color: "#61726a", fontSize: 12 }}>
-                    Querying network routing & device hardware logs...
+                <View style={{ padding: 24, alignItems: "center" }}>
+                  <ActivityIndicator size="small" color={C.brand} />
+                  <Text style={{ marginTop: 8, fontSize: 11, color: C.slate500 }}>
+                    Resolving network host & device GPS fix...
                   </Text>
                 </View>
               ) : ipData ? (
-                <ScrollView style={{ maxHeight: 420 }}>
-                  <Text style={styles.targetIp}>Target IP: {selectedIp}</Text>
+                <ScrollView style={{ maxHeight: 380 }}>
+                  <Text style={styles.modalTargetIp}>Target IP: {selectedIp}</Text>
 
                   {/* Layer 1: Network ISP */}
                   <View style={styles.layerBox}>
                     <Text style={styles.layerTitle}>🌐 LAYER 1: NETWORK ISP & ROUTING</Text>
-                    <Text style={styles.layerLine}>
-                      • ISP: <Text style={styles.boldText}>{ipData.geo?.isp || "Local Loopback / Carrier"}</Text>
-                    </Text>
-                    <Text style={styles.layerLine}>
-                      • Approx City: {ipData.geo?.city || "Local Gateway"}
-                    </Text>
-                    <Text style={styles.layerLine}>
-                      • Network Type: {ipData.geo?.networkType || "Broadband / WiFi"}
-                    </Text>
+                    <Text style={styles.layerLine}>• ISP: <Text style={styles.bold}>{ipData.geo?.isp || "Local Loopback / Host"}</Text></Text>
+                    <Text style={styles.layerLine}>• Approx City: {ipData.geo?.city || "Local Gateway"}</Text>
+                    <Text style={styles.layerLine}>• Network Type: {ipData.geo?.networkType || "Broadband / WiFi"}</Text>
                   </View>
 
-                  {/* Layer 2: Real Hardware GPS */}
-                  <View style={[styles.layerBox, { backgroundColor: "#f0fdf4", borderColor: "#86efac" }]}>
-                    <Text style={[styles.layerTitle, { color: "#166534" }]}>
-                      🛰️ LAYER 2: REAL HARDWARE DEVICE GPS
-                    </Text>
+                  {/* Layer 2: Hardware Device GPS */}
+                  <View style={[styles.layerBox, { backgroundColor: "#f0fdf4", borderColor: "#a7f3d0" }]}>
+                    <Text style={[styles.layerTitle, { color: "#166534" }]}>🛰️ LAYER 2: REAL HARDWARE GPS</Text>
                     {ipData.deviceGps?.lat && ipData.deviceGps?.lng ? (
                       <>
-                        <Text style={styles.layerLine}>
-                          • GPS Lat: <Text style={styles.boldText}>{String(ipData.deviceGps.lat)}</Text>
-                        </Text>
-                        <Text style={styles.layerLine}>
-                          • GPS Lng: <Text style={styles.boldText}>{String(ipData.deviceGps.lng)}</Text>
-                        </Text>
-                        <Text style={styles.layerLine}>
-                          • Linked User: {String(ipData.deviceGps.name || "Logged In User")} ({String(ipData.deviceGps.role || "ADMIN")})
-                        </Text>
+                        <Text style={styles.layerLine}>• GPS Lat: <Text style={styles.bold}>{String(ipData.deviceGps.lat)}</Text></Text>
+                        <Text style={styles.layerLine}>• GPS Lng: <Text style={styles.bold}>{String(ipData.deviceGps.lng)}</Text></Text>
+                        <Text style={styles.layerLine}>• Linked User: {String(ipData.deviceGps.name || "Logged In User")} ({String(ipData.deviceGps.role || "ADMIN")})</Text>
+
                         <Pressable
-                          style={[styles.btnPrimary, { marginTop: 10, minHeight: 38 }]}
+                          style={[styles.btnPrimary, { marginTop: 8, paddingVertical: 8 }]}
                           onPress={() => {
                             setIpModalVisible(false);
                             handleOpenMaps(ipData.deviceGps.lat, ipData.deviceGps.lng);
                           }}
                         >
-                          <Text style={[styles.btnPrimaryText, { fontSize: 12 }]}>
-                            Open Exact Device Pinpoint in Maps
-                          </Text>
+                          <Text style={[styles.btnPrimaryText, { fontSize: 11 }]}>Open Exact Pinpoint in Maps</Text>
                         </Pressable>
                       </>
                     ) : (
-                      <Text style={[styles.layerLine, { color: "#61726a" }]}>
-                        No active GPS fix reported for this IP session yet.
-                      </Text>
+                      <Text style={[styles.layerLine, { color: C.slate500 }]}>No active GPS fix reported for this session.</Text>
                     )}
                   </View>
                 </ScrollView>
               ) : null}
 
               <Pressable
-                style={[styles.btnPrimary, { marginTop: 14 }]}
+                style={[styles.btnOutline, { marginTop: 12 }]}
                 onPress={() => setIpModalVisible(false)}
               >
-                <Text style={styles.btnPrimaryText}>Close Tracing Inspector</Text>
+                <Text style={styles.btnOutlineText}>Close Inspector</Text>
               </Pressable>
             </View>
           </View>
@@ -569,32 +561,32 @@ export default function BookingsScreen() {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 3. WORKER VIEW (Assigned Jobs & Appointments)
+  // 3. WORKER VIEW
   // ─────────────────────────────────────────────────────────────
   if (user.role === "WORKER") {
     return (
       <ScrollView
         style={styles.container}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#075c31" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.brand} />}
       >
         <View style={styles.header}>
           <Text style={styles.eyebrow}>WORKER DASHBOARD</Text>
-          <Text style={styles.title}>Service Jobs & Requests</Text>
-          <Text style={styles.subtitle}>
+          <Text style={styles.heroTitle}>Assigned Service Jobs</Text>
+          <Text style={styles.heroSubtitle}>
             Incoming customer appointments and active work requests.
           </Text>
         </View>
 
-        <View style={styles.workerPromoCard}>
-          <View style={styles.guestIconBox}>
-            <Ionicons name="briefcase" size={32} color="#075c31" />
+        <View style={styles.denseCard}>
+          <View style={styles.centerIconPill}>
+            <Ionicons name="briefcase" size={24} color={C.brand} />
           </View>
-          <Text style={styles.emptyTitle}>Manage Jobs in Worker Dashboard</Text>
-          <Text style={styles.emptyText}>
+          <Text style={styles.heroTitle}>Manage Jobs in Worker Dashboard</Text>
+          <Text style={styles.heroSubtitle}>
             Accept new customer requests, update your live availability status, and mark jobs as completed.
           </Text>
           <Pressable
-            style={({ pressed }) => [styles.btnPrimary, { marginTop: 16 }, pressed && styles.btnPrimaryHover]}
+            style={[styles.btnPrimary, { marginTop: 14 }]}
             onPress={() => router.push("/worker-portal")}
           >
             <Text style={styles.btnPrimaryText}>Open Worker Dashboard</Text>
@@ -605,35 +597,31 @@ export default function BookingsScreen() {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 4. CUSTOMER VIEW (Appointments & Booking Tracking)
+  // 4. CUSTOMER VIEW (Appointments & Tracking)
   // ─────────────────────────────────────────────────────────────
   return (
     <ScrollView
       style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#075c31" />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.brand} />}
     >
       <View style={styles.header}>
         <Text style={styles.eyebrow}>CUSTOMER DASHBOARD</Text>
-        <Text style={styles.title}>Your Appointments</Text>
-        <Text style={styles.subtitle}>Real-time tracking and job progress</Text>
+        <Text style={styles.heroTitle}>Your Appointments</Text>
+        <Text style={styles.heroSubtitle}>Real-time job progress and hardware GPS tracking</Text>
       </View>
 
       {loading ? (
-        <View style={styles.centerLoading}>
-          <ActivityIndicator size="large" color="#075c31" />
-          <Text style={styles.loadingText}>Fetching your bookings...</Text>
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="large" color={C.brand} />
+          <Text style={styles.loadingText}>Fetching appointments...</Text>
         </View>
       ) : bookings.length === 0 ? (
         <View style={styles.emptyCard}>
-          <View style={styles.guestIconBox}>
-            <Ionicons name="calendar-outline" size={36} color="#075c31" />
-          </View>
-          <Text style={styles.emptyTitle}>No bookings yet</Text>
-          <Text style={styles.emptyText}>
-            Find a verified technician or service worker on the home tab to schedule an appointment.
-          </Text>
+          <Ionicons name="calendar-outline" size={32} color={C.slate400} />
+          <Text style={styles.emptyTitle}>No appointments scheduled</Text>
+          <Text style={styles.emptySub}>Find a verified technician on the home tab to schedule an appointment.</Text>
           <Pressable
-            style={({ pressed }) => [styles.btnPrimary, { marginTop: 16 }, pressed && styles.btnPrimaryHover]}
+            style={[styles.btnPrimary, { marginTop: 14 }]}
             onPress={() => router.push("/(tabs)")}
           >
             <Text style={styles.btnPrimaryText}>Find Services Nearby</Text>
@@ -641,55 +629,66 @@ export default function BookingsScreen() {
         </View>
       ) : (
         bookings.map((b) => {
+          const isExpanded = !!expandedBookings[b.id];
           const rawStatus = b.booking_status || b.status || "PENDING";
-          let statusColor = "#076332";
-          let statusBg = "#ddf2e4";
+          let statusColor = "#15803d";
+          let statusBg = "#dcfce7";
 
           if (rawStatus === "PENDING") {
-            statusColor = "#8b5c00";
-            statusBg = "#fff3cf";
+            statusColor = "#b45309";
+            statusBg = "#fef3c7";
           } else if (rawStatus === "CANCELLED" || rawStatus === "REJECTED") {
-            statusColor = "#a61b1b";
-            statusBg = "#fee4e2";
+            statusColor = "#b91c1c";
+            statusBg = "#fee2e2";
           }
 
           return (
-            <View key={b.id} style={styles.bookingCard}>
-              <View style={styles.bookingHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.serviceName}>{b.service_name || "Home Service"}</Text>
-                  <Text style={styles.workerName}>Worker: {b.worker_name || "Assigned Pro"}</Text>
+            <View key={b.id} style={styles.accordionCard}>
+              <Pressable
+                style={styles.accordionHeader}
+                onPress={() => toggleBookingAccordion(b.id)}
+              >
+                <View style={styles.avatarPill}>
+                  <Ionicons name="construct-outline" size={16} color={C.brand} />
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
-                  <Text style={[styles.statusText, { color: statusColor }]}>{rawStatus}</Text>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.workerName}>{b.service_name || "Home Service"}</Text>
+                  <Text style={styles.workerMeta}>Worker: {b.worker_name || "Assigned Pro"}</Text>
                 </View>
-              </View>
+                <View style={[styles.statusPill, { backgroundColor: statusBg }]}>
+                  <Text style={[styles.statusPillText, { color: statusColor }]}>{rawStatus}</Text>
+                </View>
+                <Ionicons
+                  name={isExpanded ? "chevron-up" : "chevron-down"}
+                  size={15}
+                  color={C.slate500}
+                  style={{ marginLeft: 6 }}
+                />
+              </Pressable>
 
-              <View style={styles.detailsRow}>
-                <View style={styles.detailItem}>
-                  <Ionicons name="time-outline" size={14} color="#61726a" />
-                  <Text style={styles.detailText}>
-                    {new Date(b.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-                <View style={styles.detailItem}>
-                  <Ionicons name="cash-outline" size={14} color="#61726a" />
-                  <Text style={styles.detailText}>
-                    ₹{b.total_amount || b.estimated_price || b.minimum_charge || 250}
-                  </Text>
-                </View>
-              </View>
+              {isExpanded && (
+                <View style={styles.accordionBody}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Scheduled Date:</Text>
+                    <Text style={styles.detailValue}>{new Date(b.created_at).toLocaleDateString()}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Estimated Charge:</Text>
+                    <Text style={styles.detailValue}>₹{b.total_amount || b.estimated_price || b.minimum_charge || 250}</Text>
+                  </View>
 
-              {b.service_description || b.description ? (
-                <Text style={styles.descText} numberOfLines={2}>
-                  "{b.service_description || b.description}"
-                </Text>
-              ) : null}
+                  {b.service_description || b.description ? (
+                    <Text style={styles.descText} numberOfLines={2}>
+                      "{String(b.service_description || b.description)}"
+                    </Text>
+                  ) : null}
 
-              {(rawStatus === "IN_PROGRESS" || rawStatus === "ARRIVING" || rawStatus === "STARTED") && (
-                <View style={styles.liveBanner}>
-                  <Ionicons name="radio" size={16} color="#076332" />
-                  <Text style={styles.liveText}>Job in progress • Worker on site or en route</Text>
+                  {(rawStatus === "IN_PROGRESS" || rawStatus === "ARRIVING" || rawStatus === "STARTED") && (
+                    <View style={styles.liveBanner}>
+                      <Ionicons name="radio" size={13} color="#15803d" />
+                      <Text style={styles.liveText}>Technician en route or on site • GPS Tracking Active</Text>
+                    </View>
+                  )}
                 </View>
               )}
             </View>
@@ -705,263 +704,95 @@ export default function BookingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#effaf3",
+    backgroundColor: C.bgPage,
     padding: 16,
   },
   header: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   eyebrow: {
-    color: "#08713d",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800",
-    letterSpacing: 1.2,
+    color: C.brand,
+    letterSpacing: 0.8,
     marginBottom: 4,
-    textTransform: "uppercase",
   },
-  title: {
-    fontSize: 22,
+  heroTitle: {
+    fontSize: 20,
     fontWeight: "800",
-    color: "#102a1c",
+    color: C.slate900,
+    marginBottom: 4,
   },
-  subtitle: {
-    fontSize: 13,
-    color: "#61726a",
-    marginTop: 2,
+  heroSubtitle: {
+    fontSize: 12,
+    color: C.slate600,
     lineHeight: 18,
   },
   centerBox: {
     flex: 1,
     justifyContent: "center",
     padding: 20,
-    backgroundColor: "#effaf3",
+    backgroundColor: C.bgPage,
   },
-  guestCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    padding: 24,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.08,
-    shadowRadius: 32,
-    elevation: 3,
-  },
-  workerPromoCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    padding: 24,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    marginTop: 10,
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.08,
-    shadowRadius: 32,
-    elevation: 3,
-  },
-  guestIconBox: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#e4f4e8",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 14,
-  },
-  guestTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#102a1c",
-    marginBottom: 6,
-    textAlign: "center",
-  },
-  guestSubtitle: {
-    fontSize: 13,
-    color: "#61726a",
-    textAlign: "center",
-    lineHeight: 18,
-    marginBottom: 20,
-    paddingHorizontal: 8,
-  },
-  btnPrimary: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 46,
-    paddingHorizontal: 24,
-    backgroundColor: "#075c31",
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "transparent",
-    width: "100%",
-  },
-  btnPrimaryHover: {
-    backgroundColor: "#064a28",
-  },
-  btnPrimaryText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-    fontSize: 14,
-  },
-  centerLoading: {
-    padding: 40,
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 10,
-    color: "#61726a",
-    fontSize: 13,
-  },
-  emptyCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 32,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    marginTop: 10,
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.05,
-    shadowRadius: 20,
-    elevation: 2,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#102a1c",
-    marginTop: 8,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: "#61726a",
-    textAlign: "center",
-    marginTop: 6,
-    lineHeight: 18,
-    paddingHorizontal: 12,
-  },
-  bookingCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+  denseCard: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
     padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(151,190,160,0.5)",
+    borderColor: C.border,
+    ...SHADOW.card,
+  },
+  centerIconPill: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.sm,
+    backgroundColor: C.brandLight,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 12,
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.05,
-    shadowRadius: 20,
-    elevation: 2,
-  },
-  bookingHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  serviceName: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#102a1c",
-  },
-  workerName: {
-    fontSize: 13,
-    color: "#61726a",
-    marginTop: 2,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  detailsRow: {
-    flexDirection: "row",
-    gap: 16,
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#edf2ee",
-  },
-  detailItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  detailText: {
-    fontSize: 12,
-    color: "#61726a",
-    fontWeight: "600",
-  },
-  descText: {
-    fontSize: 12,
-    color: "#475569",
-    fontStyle: "italic",
-    marginTop: 8,
-  },
-  liveBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#ddf2e4",
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 10,
-    gap: 6,
-  },
-  liveText: {
-    fontSize: 12,
-    color: "#076332",
-    fontWeight: "700",
   },
 
-  // ── Admin Security Center Styles ──
-  adminStatsRow: {
+  // ── High-Density KPI Row ──
+  kpiRow: {
     flexDirection: "row",
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  adminStatCard: {
+  kpiCard: {
     flex: 1,
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
+    padding: 10,
     borderWidth: 1,
-    borderColor: "#e1e8e3",
+    borderColor: C.border,
+    borderLeftWidth: 3,
+    ...SHADOW.card,
   },
-  adminStatLabel: {
-    fontSize: 9,
+  kpiLabel: {
+    fontSize: 8.5,
     fontWeight: "800",
-    color: "#61726a",
+    color: C.slate500,
     letterSpacing: 0.5,
   },
-  adminStatVal: {
+  kpiValue: {
     fontSize: 16,
-    fontWeight: "800",
-    color: "#102a1c",
-    marginTop: 4,
-  },
-  adminStatValHighlight: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#0284c7",
-    marginTop: 4,
-  },
-  adminStatSub: {
-    fontSize: 9,
-    color: "#61726a",
+    fontWeight: "900",
+    color: C.slate900,
     marginTop: 2,
   },
+  kpiSub: {
+    fontSize: 9,
+    color: C.slate500,
+    marginTop: 1,
+  },
+
+  // ── Mode Tabs ──
   modeTabs: {
     flexDirection: "row",
-    backgroundColor: "#e2ebe5",
-    borderRadius: 10,
+    backgroundColor: C.slate200,
+    borderRadius: RADIUS.sm,
     padding: 3,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   modeTab: {
     flex: 1,
@@ -969,70 +800,101 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 7,
+    borderRadius: RADIUS.xs,
   },
   modeTabActive: {
-    backgroundColor: "#075c31",
+    backgroundColor: C.brand,
   },
   modeTabText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#475569",
+    color: C.slate600,
   },
   modeTabTextActive: {
-    color: "#ffffff",
+    color: "#FFFFFF",
   },
-  sectionSubtitle: {
-    fontSize: 12,
-    color: "#61726a",
-    marginBottom: 12,
-  },
-  strideCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    marginBottom: 10,
-  },
-  strideHeaderRow: {
+
+  // ── Search & Vector Pills ──
+  searchBar: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+    height: 38,
+    gap: 8,
+    marginBottom: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 12,
+    color: C.slate900,
+  },
+  vectorPillScroll: {
+    marginBottom: 10,
+  },
+  vectorPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.xs,
+    backgroundColor: C.bgCard,
+    borderWidth: 1,
+  },
+  vectorPillText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
+
+  // ── STRIDE Matrix Cards ──
+  matrixHeaderSub: {
+    fontSize: 11,
+    color: C.slate500,
+    marginBottom: 10,
+  },
+  strideCard: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: 8,
   },
   strideCodeBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: "#ddf2e4",
+    width: 28,
+    height: 28,
+    borderRadius: RADIUS.xs,
+    backgroundColor: C.brandLight,
     alignItems: "center",
     justifyContent: "center",
   },
   strideCodeText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "900",
-    color: "#075c31",
+    color: C.brand,
   },
   strideVectorTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
-    color: "#102a1c",
+    color: C.slate900,
   },
   strideThreatDesc: {
-    fontSize: 11,
-    color: "#61726a",
+    fontSize: 10.5,
+    color: C.slate500,
     marginTop: 1,
   },
-  riskBadge: {
+  scorePill: {
     backgroundColor: "#f0fdf4",
     borderWidth: 1,
-    borderColor: "#86efac",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
+    borderColor: "#bbf7d0",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.xs,
   },
-  riskBadgeText: {
-    fontSize: 11,
+  scorePillText: {
+    fontSize: 10,
     fontWeight: "700",
     color: "#166534",
   },
@@ -1040,245 +902,362 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#f8faf9",
-    borderRadius: 8,
-    padding: 8,
-    marginTop: 10,
+    backgroundColor: C.slate50,
+    borderRadius: RADIUS.xs,
+    padding: 7,
+    marginTop: 8,
     borderWidth: 1,
-    borderColor: "#edf2ee",
+    borderColor: C.border,
   },
   mitigationText: {
-    fontSize: 11,
-    color: "#234534",
+    fontSize: 10.5,
+    color: C.slate700,
     fontWeight: "600",
     flex: 1,
   },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    marginBottom: 10,
-    height: 40,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: "#102a1c",
-  },
-  pillScroll: {
-    marginBottom: 10,
-  },
-  catPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-  },
-  catPillActive: {
-    backgroundColor: "#075c31",
-    borderColor: "#075c31",
-  },
-  catPillText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#475569",
-  },
-  catPillTextActive: {
-    color: "#ffffff",
-  },
+
+  // ── Audit Card Accordion ──
   auditCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: "#e1e8e3",
-    marginBottom: 10,
+    borderColor: C.border,
+    marginBottom: 8,
+    overflow: "hidden",
+    ...SHADOW.card,
   },
-  auditCardHeader: {
+  auditHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    padding: 10,
   },
-  strideBadge: {
+  vectorTag: {
     backgroundColor: "#e0f2fe",
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: RADIUS.xs,
   },
-  strideBadgeText: {
+  vectorTagText: {
+    fontSize: 10,
+    fontWeight: "800",
     color: "#0369a1",
-    fontSize: 10,
+  },
+  auditAction: {
+    fontSize: 12.5,
     fontWeight: "800",
+    color: C.slate900,
   },
-  auditStatusTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
+  auditMeta: {
+    fontSize: 10.5,
+    color: C.slate500,
+    marginTop: 1,
   },
-  auditStatusSuccess: {
-    backgroundColor: "#ddf2e4",
+  statusTagSuccess: {
+    backgroundColor: "#dcfce7",
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: RADIUS.xs,
   },
-  auditStatusFailed: {
-    backgroundColor: "#fee4e2",
-  },
-  auditStatusTagText: {
-    fontSize: 10,
+  statusTagTextSuccess: {
+    fontSize: 8.5,
     fontWeight: "800",
+    color: "#15803d",
   },
-  auditStatusTagTextSuccess: {
-    color: "#076332",
+  statusTagFailed: {
+    backgroundColor: "#fee2e2",
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: RADIUS.xs,
   },
-  auditStatusTagTextFailed: {
-    color: "#dc2626",
-  },
-  auditActionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 8,
-  },
-  auditActionName: {
-    fontSize: 14,
+  statusTagTextFailed: {
+    fontSize: 8.5,
     fontWeight: "800",
-    color: "#102a1c",
+    color: "#b91c1c",
   },
-  auditTime: {
-    fontSize: 11,
-    color: "#61726a",
+  auditBody: {
+    padding: 10,
+    paddingTop: 0,
+    borderTopWidth: 1,
+    borderTopColor: C.slate100,
+    backgroundColor: C.slate50,
   },
-  auditUser: {
-    fontSize: 12,
-    color: "#61726a",
-    marginTop: 4,
-  },
-  chipRow: {
+  chipsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 6,
     marginTop: 8,
   },
   gpsChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#ddf2e4",
-    paddingHorizontal: 8,
+    backgroundColor: "#ecfdf5",
+    paddingHorizontal: 7,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: RADIUS.xs,
+    borderWidth: 1,
+    borderColor: "#a7f3d0",
   },
   gpsChipText: {
-    fontSize: 11,
+    fontSize: 10,
+    fontFamily: "monospace",
+    color: "#047857",
     fontWeight: "700",
-    color: "#076332",
   },
   ipChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#e0f2fe",
-    paddingHorizontal: 8,
+    backgroundColor: "#f0f9ff",
+    paddingHorizontal: 7,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: RADIUS.xs,
+    borderWidth: 1,
+    borderColor: "#bae6fd",
   },
   ipChipText: {
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 10,
+    fontFamily: "monospace",
     color: "#0284c7",
+    fontWeight: "700",
+  },
+  payloadBox: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.xs,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginTop: 8,
+  },
+  payloadLabel: {
+    fontSize: 8.5,
+    fontWeight: "800",
+    color: C.slate500,
+    letterSpacing: 0.5,
+    marginBottom: 3,
+  },
+  payloadText: {
+    fontSize: 10,
+    fontFamily: "monospace",
+    color: C.slate800,
+    lineHeight: 14,
   },
   btnOpenMaps: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    backgroundColor: "#effaf3",
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#97bea0",
-    marginTop: 10,
+    gap: 5,
+    backgroundColor: C.brandLight,
+    paddingVertical: 6,
+    borderRadius: RADIUS.xs,
+    marginTop: 8,
   },
   btnOpenMapsText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "700",
-    color: "#075c31",
+    color: C.brand,
   },
-  auditDetails: {
+
+  // ── Customer Appointments Accordion ──
+  accordionCard: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: 8,
+    overflow: "hidden",
+    ...SHADOW.card,
+  },
+  accordionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+  },
+  avatarPill: {
+    width: 34,
+    height: 34,
+    borderRadius: RADIUS.sm,
+    backgroundColor: C.brandLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  workerName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: C.slate900,
+  },
+  workerMeta: {
     fontSize: 11,
-    color: "#64748b",
+    color: C.slate500,
+    marginTop: 1,
+  },
+  statusPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: RADIUS.xs,
+  },
+  statusPillText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+  },
+  accordionBody: {
+    padding: 12,
+    paddingTop: 0,
+    borderTopWidth: 1,
+    borderTopColor: C.slate100,
+    backgroundColor: C.slate50,
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+  },
+  detailLabel: {
+    fontSize: 11,
+    color: C.slate500,
+  },
+  detailValue: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: C.slate800,
+  },
+  descText: {
+    fontSize: 11,
+    color: C.slate600,
     fontStyle: "italic",
+    marginTop: 6,
+  },
+  liveBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#dcfce7",
+    padding: 8,
+    borderRadius: RADIUS.xs,
     marginTop: 8,
+  },
+  liveText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#15803d",
   },
 
   // ── Modal Styles ──
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
-  modalContent: {
-    backgroundColor: "#ffffff",
-    borderRadius: 18,
-    padding: 20,
+  modalCard: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.lg,
+    padding: 16,
     width: "100%",
     maxWidth: 420,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 5,
+    ...SHADOW.modal,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#edf2ee",
-    paddingBottom: 10,
+    borderBottomColor: C.border,
+    paddingBottom: 8,
   },
   modalTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800",
-    color: "#102a1c",
+    color: C.slate900,
   },
-  targetIp: {
-    fontSize: 12,
-    fontWeight: "700",
+  modalTargetIp: {
+    fontSize: 11,
+    fontFamily: "monospace",
     color: "#0284c7",
-    marginBottom: 10,
+    fontWeight: "700",
+    marginBottom: 8,
   },
   layerBox: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 10,
-    padding: 12,
+    backgroundColor: C.slate50,
+    borderRadius: RADIUS.sm,
+    padding: 10,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    marginBottom: 10,
+    borderColor: C.border,
+    marginBottom: 8,
   },
   layerTitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800",
     color: "#0369a1",
-    marginBottom: 6,
     letterSpacing: 0.5,
+    marginBottom: 4,
   },
   layerLine: {
-    fontSize: 12,
-    color: "#334155",
-    marginBottom: 3,
+    fontSize: 11,
+    color: C.slate700,
+    marginBottom: 2,
   },
-  boldText: {
+  bold: {
     fontWeight: "700",
-    color: "#0f172a",
+    color: C.slate900,
+  },
+
+  // ── Buttons ──
+  btnPrimary: {
+    backgroundColor: C.brand,
+    borderRadius: RADIUS.sm,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnPrimaryText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  btnOutline: {
+    backgroundColor: "transparent",
+    borderRadius: RADIUS.sm,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  btnOutlineText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.slate700,
+  },
+  loadingBox: {
+    padding: 30,
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 11,
+    color: C.slate500,
+  },
+  emptyCard: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  emptyTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: C.slate800,
+    marginTop: 6,
+  },
+  emptySub: {
+    fontSize: 11,
+    color: C.slate500,
+    textAlign: "center",
+    marginTop: 2,
   },
 });

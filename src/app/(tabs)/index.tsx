@@ -9,22 +9,23 @@ import {
   RefreshControl,
   Alert,
   TextInput,
-  TouchableOpacity,
+  Linking,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { C, RADIUS, SHADOW } from "../../constants/theme";
 
 const RADIUS_OPTIONS = [5, 10, 15, 20];
 
 const POPULAR_SERVICES = [
-  { icon: "🔧", title: "Plumbing", text: "Leaks, taps, pipes and fittings" },
-  { icon: "⚡", title: "Electrical", text: "Wiring, switches and repairs" },
-  { icon: "🧹", title: "Home Cleaning", text: "Reliable cleaning professionals" },
-  { icon: "🪚", title: "Carpentry", text: "Furniture and home repairs" },
-  { icon: "❄️", title: "AC Repair", text: "Servicing, installation and repairs" },
+  { icon: "🔧", title: "Plumbing", text: "Pipes, faucets & sanitary repair" },
+  { icon: "⚡", title: "Electrical", text: "Wiring, circuit boards & fixtures" },
+  { icon: "🧹", title: "Home Cleaning", text: "Deep cleaning & sanitation" },
+  { icon: "🪚", title: "Carpentry", text: "Furniture & structural repair" },
+  { icon: "❄️", title: "AC Repair", text: "Servicing, gas recharge & setup" },
 ];
 
 function getCategoryEmoji(name: string): string {
@@ -44,18 +45,20 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
 
-  // Customer state
+  // Customer State
   const [services, setServices] = useState<any[]>([]);
   const [selectedService, setSelectedService] = useState<string>("AC Repair");
   const [radius, setRadius] = useState(15);
   const [workers, setWorkers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [locationName, setLocationName] = useState("Detecting location...");
+  const [locationName, setLocationName] = useState("Detecting GPS coordinates...");
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
 
-  // Admin state (mirrors website AdminDashboard.jsx)
+  // Accordion State: tracks which worker card is expanded
+  const [expandedWorkers, setExpandedWorkers] = useState<{ [id: string]: boolean }>({});
+
+  // Admin State
   const [adminSummary, setAdminSummary] = useState({
     total_workers: 0,
     pending_workers: 0,
@@ -133,7 +136,7 @@ export default function HomeScreen() {
       if (status !== "granted") {
         const fallback = { latitude: 23.2599, longitude: 77.4126 };
         setCoords(fallback);
-        setLocationName("Bhopal, MP (Default)");
+        setLocationName("Bhopal, MP • 23.2599°N, 77.4126°E");
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -143,23 +146,24 @@ export default function HomeScreen() {
         const reverse = await Location.reverseGeocodeAsync(current);
         if (reverse?.length > 0) {
           const item = reverse[0];
-          setLocationName(`${item.city || item.district || "Near you"}, ${item.region || ""}`);
+          setLocationName(
+            `${item.city || item.district || "Local Region"}, ${item.region || ""} • ${current.latitude.toFixed(4)}°N, ${current.longitude.toFixed(4)}°E`
+          );
         } else {
-          setLocationName(`${current.latitude.toFixed(3)}°N, ${current.longitude.toFixed(3)}°E`);
+          setLocationName(`${current.latitude.toFixed(4)}°N, ${current.longitude.toFixed(4)}°E`);
         }
       } catch {
-        setLocationName(`${current.latitude.toFixed(3)}°N, ${current.longitude.toFixed(3)}°E`);
+        setLocationName(`${current.latitude.toFixed(4)}°N, ${current.longitude.toFixed(4)}°E`);
       }
     } catch {
       setCoords({ latitude: 23.2599, longitude: 77.4126 });
-      setLocationName("Bhopal, MP");
+      setLocationName("Bhopal, MP • 23.2599°N, 77.4126°E");
     }
   }
 
   async function loadNearbyWorkers() {
     if (!user || !coords) return;
     setLoading(true);
-    setHasSearched(true);
     try {
       const res = await api.get("/workers/nearby", {
         params: {
@@ -192,6 +196,17 @@ export default function HomeScreen() {
     }
   };
 
+  const handleOpenMaps = (lat: number, lng: number) => {
+    const url = `https://www.google.com/maps?q=${lat},${lng}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Coordinates", `Latitude: ${lat}\nLongitude: ${lng}`);
+    });
+  };
+
+  const toggleAccordion = (id: string) => {
+    setExpandedWorkers((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     requestDeviceLocation();
@@ -209,372 +224,422 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#075c31" />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.brand} />}
     >
-      {/* GPS Location Bar */}
-      <View style={styles.locationCard}>
-        <View style={styles.locationInfo}>
-          <Ionicons name="location" size={18} color="#075c31" />
-          <View style={{ marginLeft: 8, flex: 1 }}>
-            <Text style={styles.locationLabel}>Your Hardware GPS Location</Text>
-            <Text style={styles.locationValue} numberOfLines={1}>{locationName}</Text>
-          </View>
-        </View>
-        <Pressable
-          style={({ pressed }) => [styles.refreshLocBtn, pressed && { backgroundColor: "#cfeeda" }]}
-          onPress={requestDeviceLocation}
-        >
-          <Ionicons name="locate" size={16} color="#075c31" />
+      {/* ── Enterprise Header: Real Hardware GPS Pill ── */}
+      <View style={styles.gpsBar}>
+        <View style={styles.gpsDotPulse} />
+        <Ionicons name="hardware-chip-outline" size={14} color={C.brand} />
+        <Text style={styles.gpsBarText} numberOfLines={1}>
+          {locationName}
+        </Text>
+        <Pressable onPress={requestDeviceLocation} hitSlop={8} style={{ padding: 2 }}>
+          <Ionicons name="refresh" size={13} color={C.brand} />
         </Pressable>
       </View>
 
       {/* ─────────────────────────────────────────────────────────────
-          1. UNHEALTHY / GUEST VIEW (Matches website HomePage.jsx)
+          1. GUEST / UNHEALTHY VIEW
           ───────────────────────────────────────────────────────────── */}
       {!user ? (
-        <View style={styles.guestSection}>
-          <Text style={styles.eyebrow}>RELIABLE HOME SERVICES</Text>
-          <Text style={styles.heroHeading}>Find trusted help for every home repair.</Text>
-          <Text style={styles.heroSubtitle}>
-            ProxiFix connects you with verified local professionals for plumbing, electrical repairs, cleaning, carpentry, and more.
-          </Text>
+        <View style={styles.contentWrap}>
+          {/* Hero Banner */}
+          <View style={styles.enterpriseHero}>
+            <View style={styles.securityPill}>
+              <Ionicons name="shield-checkmark" size={12} color={C.brand} />
+              <Text style={styles.securityPillText}>STRIDE SECURED & GPS VERIFIED</Text>
+            </View>
+            <Text style={styles.heroTitle}>Enterprise-Grade Home Service Logistics</Text>
+            <Text style={styles.heroSubtitle}>
+              On-demand verified professionals with immutable audit trails, cryptographic non-repudiation, and hardware GPS tracking.
+            </Text>
 
-          {/* Action buttons matching website's .hero-actions */}
-          <View style={styles.heroActionRow}>
-            <Pressable
-              style={({ pressed }) => [styles.btnPrimary, styles.heroActionBtn, pressed && styles.btnPrimaryHover]}
-              onPress={() => router.push("/login")}
-            >
-              <Text style={styles.btnPrimaryText}>Find a Worker</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.btnOutline, styles.heroActionBtn, pressed && { backgroundColor: "#e4f4e8" }]}
-              onPress={() => router.push("/register?role=WORKER")}
-            >
-              <Text style={styles.btnOutlineText}>Join as a Worker</Text>
-            </Pressable>
+            <View style={styles.heroBtnRow}>
+              <Pressable
+                style={({ pressed }) => [styles.btnPrimary, pressed && styles.btnPressed]}
+                onPress={() => router.push("/login")}
+              >
+                <Text style={styles.btnPrimaryText}>Sign In to Request Services</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.btnOutline, pressed && styles.btnPressed]}
+                onPress={() => router.push("/register")}
+              >
+                <Text style={styles.btnOutlineText}>Register Account</Text>
+              </Pressable>
+            </View>
           </View>
 
-          {/* Popular Services Card matching website's .hero-card */}
-          <View style={styles.popularCard}>
-            <Text style={styles.cardSectionTitle}>Popular services</Text>
-            {POPULAR_SERVICES.map((item, idx) => (
+          {/* Popular Services Section */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.eyebrow}>SERVICES DIRECTORY</Text>
+            <Text style={styles.sectionTitle}>Available Service Categories</Text>
+          </View>
+
+          <View style={styles.denseCard}>
+            {POPULAR_SERVICES.map((s, idx) => (
               <Pressable
-                key={item.title}
+                key={s.title}
                 style={({ pressed }) => [
-                  styles.quickServiceRow,
+                  styles.serviceRow,
                   idx === POPULAR_SERVICES.length - 1 && { borderBottomWidth: 0 },
-                  pressed && { backgroundColor: "#f2f9f4" },
+                  pressed && { backgroundColor: C.slate50 },
                 ]}
                 onPress={() => router.push("/login")}
               >
-                <View style={styles.quickIconBox}>
-                  <Text style={{ fontSize: 22 }}>{item.icon}</Text>
-                </View>
+                <Text style={{ fontSize: 20, marginRight: 12 }}>{s.icon}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.quickServiceTitle}>{item.title}</Text>
-                  <Text style={styles.quickServiceText}>{item.text}</Text>
+                  <Text style={styles.serviceRowTitle}>{s.title}</Text>
+                  <Text style={styles.serviceRowSub}>{s.text}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color="#97bea0" />
+                <Ionicons name="chevron-forward" size={14} color={C.slate400} />
               </Pressable>
             ))}
           </View>
 
-          {/* How It Works matching website's .process-section */}
-          <View style={styles.processSection}>
-            <Text style={styles.eyebrow}>SIMPLE PROCESS</Text>
-            <Text style={styles.cardSectionTitle}>Book a home service in three steps.</Text>
-
-            <View style={styles.processCard}>
-              <View style={styles.stepNumberBadge}>
-                <Text style={styles.stepNumberText}>1</Text>
-              </View>
-              <Text style={styles.processStepTitle}>Choose a service</Text>
-              <Text style={styles.processStepDesc}>Select a category and search for verified workers near your current location.</Text>
-            </View>
-
-            <View style={styles.processCard}>
-              <View style={styles.stepNumberBadge}>
-                <Text style={styles.stepNumberText}>2</Text>
-              </View>
-              <Text style={styles.processStepTitle}>Send a booking request</Text>
-              <Text style={styles.processStepDesc}>Describe your issue and send a request to the worker you choose.</Text>
-            </View>
-
-            <View style={styles.processCard}>
-              <View style={styles.stepNumberBadge}>
-                <Text style={styles.stepNumberText}>3</Text>
-              </View>
-              <Text style={styles.processStepTitle}>Get the work done</Text>
-              <Text style={styles.processStepDesc}>Track your booking, confirm completion, and rate the worker once.</Text>
-            </View>
+          {/* Three Steps Operations */}
+          <View style={[styles.sectionHeader, { marginTop: 20 }]}>
+            <Text style={styles.eyebrow}>ZERO-TRUST VERIFICATION</Text>
+            <Text style={styles.sectionTitle}>How ProxiFix Operates</Text>
           </View>
 
-          {/* Worker Callout Card matching website's .worker-callout-card */}
-          <View style={styles.workerCalloutCard}>
-            <Text style={styles.eyebrow}>FOR SERVICE PROFESSIONALS</Text>
-            <Text style={styles.workerCalloutTitle}>Grow your work with ProxiFix.</Text>
-            <Text style={styles.workerCalloutText}>
-              Create a worker profile, wait for admin approval, go online, and receive nearby service requests.
-            </Text>
-            <Pressable
-              style={({ pressed }) => [styles.btnPrimary, pressed && styles.btnPrimaryHover]}
-              onPress={() => router.push("/register?role=WORKER")}
-            >
-              <Text style={styles.btnPrimaryText}>Register as a Worker</Text>
-            </Pressable>
-          </View>
-
-          {/* Footer matching website's .site-footer */}
-          <View style={styles.siteFooter}>
-            <Text style={styles.footerText}>© 2026 ProxiFix. Trusted home services made simple.</Text>
-            <Text style={styles.footerCredit}>Crafted by Ravi Ranjan Kumar</Text>
+          <View style={styles.denseCard}>
+            {[
+              { step: "01", title: "Select Service & Geofence Radius", desc: "Hardware GPS detects your coordinates and searches authorized workers within bounds." },
+              { step: "02", title: "Immutable Request Dispatch", desc: "Booking requests are hashed and written to non-repudiation audit logs." },
+              { step: "03", title: "Live Arrival & Signed Completion", desc: "Real-time hardware GPS location streaming with post-job digital confirmation." },
+            ].map((p, i) => (
+              <View key={p.step} style={[styles.processItem, i === 2 && { borderBottomWidth: 0 }]}>
+                <View style={styles.processStepBadge}>
+                  <Text style={styles.processStepText}>{p.step}</Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.processTitle}>{p.title}</Text>
+                  <Text style={styles.processDesc}>{p.desc}</Text>
+                </View>
+              </View>
+            ))}
           </View>
         </View>
       ) : user.role === "ADMIN" ? (
         /* ─────────────────────────────────────────────────────────────
-            2. ADMINISTRATOR DASHBOARD (Matches website AdminDashboard.jsx)
+            2. ADMINISTRATOR DASHBOARD (Minimalist Enterprise Option 3)
             ───────────────────────────────────────────────────────────── */
-        <View>
-          <Text style={styles.eyebrow}>ADMINISTRATOR</Text>
-          <Text style={styles.heroHeading}>Welcome, {user.name || "Admin"}</Text>
-          <Text style={styles.heroSubtitle}>
-            Review service professionals, monitor registrations by service, and keep customers safe.
-          </Text>
-
-          {/* 4 Summary Cards matching website's .admin-summary-grid */}
-          <View style={styles.adminSummaryGrid}>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryCardIcon}>👷</Text>
-              <Text style={styles.summaryCardVal}>{adminSummary.total_workers}</Text>
-              <Text style={styles.summaryCardTitle}>Total Workers</Text>
-            </View>
-
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryCardIcon}>⌛</Text>
-              <Text style={[styles.summaryCardVal, { color: "#d97706" }]}>{adminSummary.pending_workers}</Text>
-              <Text style={styles.summaryCardTitle}>Pending Approval</Text>
-            </View>
-
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryCardIcon}>✅</Text>
-              <Text style={[styles.summaryCardVal, { color: "#059669" }]}>{adminSummary.approved_workers}</Text>
-              <Text style={styles.summaryCardTitle}>Approved</Text>
-            </View>
-
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryCardIcon}>⛔</Text>
-              <Text style={[styles.summaryCardVal, { color: "#dc2626" }]}>{adminSummary.rejected_workers}</Text>
-              <Text style={styles.summaryCardTitle}>Rejected</Text>
+        <View style={styles.contentWrap}>
+          {/* Header */}
+          <View style={styles.adminHeader}>
+            <View>
+              <Text style={styles.eyebrow}>ADMINISTRATOR CONSOLE</Text>
+              <Text style={styles.heroTitle}>Operations & Verification</Text>
+              <Text style={styles.heroSubtitle}>
+                Platform metrics, technician approvals, and service category telemetry.
+              </Text>
             </View>
           </View>
 
-          {/* Quick Access to STRIDE Security Center & Exact GPS Logs */}
+          {/* High-Density 2x2 Metric Grid with top accent borders */}
+          <View style={styles.metricGrid}>
+            <View style={[styles.metricTile, { borderTopColor: C.brand }]}>
+              <Text style={styles.metricLabel}>TOTAL WORKERS</Text>
+              <Text style={styles.metricValue}>{adminSummary.total_workers}</Text>
+              <Text style={styles.metricSub}>Registered technicians</Text>
+            </View>
+
+            <View style={[styles.metricTile, { borderTopColor: adminSummary.pending_workers > 0 ? "#d97706" : C.slate400 }]}>
+              <Text style={styles.metricLabel}>PENDING APPROVAL</Text>
+              <Text style={[styles.metricValue, { color: adminSummary.pending_workers > 0 ? "#d97706" : C.slate800 }]}>
+                {adminSummary.pending_workers}
+              </Text>
+              <Text style={styles.metricSub}>Awaiting verification</Text>
+            </View>
+
+            <View style={[styles.metricTile, { borderTopColor: "#15803d" }]}>
+              <Text style={styles.metricLabel}>APPROVED ACTIVE</Text>
+              <Text style={[styles.metricValue, { color: "#15803d" }]}>{adminSummary.approved_workers}</Text>
+              <Text style={styles.metricSub}>Verified & active</Text>
+            </View>
+
+            <View style={[styles.metricTile, { borderTopColor: "#b91c1c" }]}>
+              <Text style={styles.metricLabel}>DECOMMISSIONED</Text>
+              <Text style={[styles.metricValue, { color: "#b91c1c" }]}>{adminSummary.rejected_workers}</Text>
+              <Text style={styles.metricSub}>Offline or rejected</Text>
+            </View>
+          </View>
+
+          {/* STRIDE Security Banner */}
           <Pressable
-            style={({ pressed }) => [styles.securityBannerCard, pressed && { opacity: 0.9 }]}
+            style={styles.strideSecurityCard}
             onPress={() => router.push("/admin-portal")}
           >
-            <View style={styles.securityBannerLeft}>
-              <View style={styles.shieldIconCircle}>
-                <Ionicons name="shield-checkmark" size={24} color="#ffffff" />
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Ionicons name="shield-checkmark" size={18} color="#0369a1" />
+                <Text style={styles.strideTitle}>STRIDE Non-Repudiation Security Terminal</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.securityBannerTitle}>STRIDE & DREAD Security Center</Text>
-                <Text style={styles.securityBannerSubtitle}>
-                  Trace Layer 1 IPs & open Layer 2 Real Device GPS pinpoints in Google Maps
-                </Text>
+              <View style={styles.statusPillLive}>
+                <Text style={styles.statusPillLiveText}>ACTIVE 🔒</Text>
               </View>
             </View>
-            <View style={styles.securityBannerArrow}>
-              <Ionicons name="chevron-forward" size={18} color="#075c31" />
+            <Text style={styles.strideSubtitle}>
+              Hardware GPS tracing, Layer 1/2 IP lookup & immutable SQLite audit logs.
+            </Text>
+            <View style={styles.strideActionRow}>
+              <Text style={styles.strideActionLink}>Open Security & Audit Terminal</Text>
+              <Ionicons name="arrow-forward" size={13} color="#0369a1" />
             </View>
           </Pressable>
 
-          {/* Pending Worker Applications Section */}
-          <View style={styles.sectionHeaderBlock}>
-            <Text style={styles.eyebrow}>VERIFICATION MANAGEMENT</Text>
-            <Text style={styles.sectionHeading}>Pending Worker Applications</Text>
-            <Text style={styles.sectionSubtitleText}>
-              Verify technician credentials and activate their accounts for dispatch.
-            </Text>
-          </View>
-
-          {pendingWorkers.length === 0 ? (
-            <View style={styles.emptyCardContainer}>
-              <Ionicons name="checkmark-circle-outline" size={36} color="#059669" />
-              <Text style={styles.emptyCardTitleText}>No Pending Applications</Text>
-              <Text style={styles.emptyCardSubText}>All worker registrations are verified and up to date.</Text>
-            </View>
-          ) : (
-            pendingWorkers.map((w) => (
-              <View key={w.id} style={styles.workerManageCard}>
-                <View style={styles.workerCardTop}>
-                  <View style={styles.workerAvatar}>
-                    <Text style={styles.workerAvatarText}>{w.name ? w.name[0].toUpperCase() : "W"}</Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.workerNameText}>{w.name}</Text>
-                    <Text style={styles.workerMetaText}>{w.email} • {w.phone}</Text>
-                    <Text style={styles.workerServiceText}>
-                      Services: {w.services?.join(", ") || "General Home Service"}
-                    </Text>
-                  </View>
-                  <View style={styles.pendingBadge}>
-                    <Text style={styles.pendingBadgeText}>PENDING</Text>
-                  </View>
-                </View>
-
-                {w.description && (
-                  <Text style={styles.workerBioText}>"{w.description}"</Text>
-                )}
-
-                <View style={styles.actionButtonsRow}>
-                  <Pressable
-                    style={({ pressed }) => [styles.btnReject, pressed && styles.btnRejectHover]}
-                    onPress={() => handleUpdateWorkerStatus(w.id, "REJECTED")}
-                    disabled={actionLoadingId === w.id}
-                  >
-                    <Text style={styles.btnRejectText}>Reject</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={({ pressed }) => [styles.btnApprove, pressed && styles.btnApproveHover]}
-                    onPress={() => handleUpdateWorkerStatus(w.id, "APPROVED")}
-                    disabled={actionLoadingId === w.id}
-                  >
-                    <Text style={styles.btnApproveText}>Approve Worker</Text>
-                  </Pressable>
-                </View>
+          {/* Pending Applications Section */}
+          {pendingWorkers.length > 0 && (
+            <View style={{ marginTop: 16 }}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.eyebrow}>ACTION REQUIRED</Text>
+                <Text style={styles.sectionTitle}>
+                  Pending Approvals ({pendingWorkers.length})
+                </Text>
               </View>
-            ))
+
+              {pendingWorkers.map((w) => (
+                <View key={w.id} style={styles.pendingCard}>
+                  <View style={styles.pendingCardHeader}>
+                    <View style={styles.avatarPill}>
+                      <Text style={styles.avatarText}>{w.name?.[0]?.toUpperCase() || "W"}</Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={styles.workerName}>{w.name}</Text>
+                      <Text style={styles.workerMeta}>{w.email} • {w.phone || "No phone"}</Text>
+                      <Text style={styles.workerServiceTag}>
+                        Service: {Array.isArray(w.services) ? w.services.join(", ") : w.services || "Home Service"}
+                      </Text>
+                    </View>
+                    <View style={styles.badgePending}>
+                      <Text style={styles.badgePendingText}>PENDING</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.actionRow}>
+                    <Pressable
+                      style={[styles.btnAction, styles.btnReject]}
+                      onPress={() => handleUpdateWorkerStatus(w.id, "REJECTED")}
+                      disabled={actionLoadingId === w.id}
+                    >
+                      <Text style={styles.btnRejectText}>Reject</Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={[styles.btnAction, styles.btnApprove]}
+                      onPress={() => handleUpdateWorkerStatus(w.id, "APPROVED")}
+                      disabled={actionLoadingId === w.id}
+                    >
+                      <Text style={styles.btnApproveText}>Approve Worker</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
           )}
 
-          {/* Service Overview: Registered workers by service */}
-          <View style={styles.sectionHeaderBlock}>
-            <Text style={styles.eyebrow}>SERVICE OVERVIEW</Text>
-            <Text style={styles.sectionHeading}>Registered Workers by Service</Text>
-            <Text style={styles.sectionSubtitleText}>Distribution of technicians across categories.</Text>
+          {/* Service Distribution Overview */}
+          <View style={[styles.sectionHeader, { marginTop: 20 }]}>
+            <Text style={styles.eyebrow}>SERVICE TELEMETRY</Text>
+            <Text style={styles.sectionTitle}>Registered Technicians by Service</Text>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.serviceCountsScroll}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hScroll}>
             {adminServiceCounts.map((s) => (
-              <View key={s.id || s.name} style={styles.serviceCountCard}>
-                <Text style={{ fontSize: 24, marginBottom: 6 }}>{getCategoryEmoji(s.name)}</Text>
-                <Text style={styles.serviceCountName}>{s.name}</Text>
-                <Text style={styles.serviceCountTotal}>{s.total_workers || 0} Registered</Text>
-                <Text style={styles.serviceCountBreakdown}>
-                  {s.approved_workers || 0} approved • {s.pending_workers || 0} pending
-                </Text>
+              <View key={s.id || s.name} style={styles.serviceTelemetryTile}>
+                <Text style={{ fontSize: 20 }}>{getCategoryEmoji(s.name)}</Text>
+                <Text style={styles.telemetryName}>{s.name}</Text>
+                <Text style={styles.telemetryCount}>{s.total_workers || 0} Registered</Text>
+                <View style={styles.telemetryBreakdown}>
+                  <Text style={styles.telemetryApproved}>
+                    {s.approved_workers || 0} approved
+                  </Text>
+                  <Text style={styles.telemetryPending}>
+                    {s.pending_workers || 0} pending
+                  </Text>
+                </View>
               </View>
             ))}
           </ScrollView>
 
-          {/* All Registered Workers Directory */}
-          <View style={styles.sectionHeaderBlock}>
+          {/* Fast Filterable Worker Directory (High-Density Accordion Cards) */}
+          <View style={[styles.sectionHeader, { marginTop: 20 }]}>
             <Text style={styles.eyebrow}>WORKER DIRECTORY</Text>
-            <Text style={styles.sectionHeading}>All Registered Workers</Text>
-            <Text style={styles.sectionSubtitleText}>
-              Showing {adminWorkers.length} registered service providers.
-            </Text>
+            <Text style={styles.sectionTitle}>Registered Personnel ({adminWorkers.length})</Text>
           </View>
 
-          {adminWorkers.map((w) => {
-            const isApproved = w.verification_status === "APPROVED";
-            return (
-              <View key={w.id} style={styles.workerDirectoryCard}>
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <Text style={styles.workerNameText}>{w.name}</Text>
-                  <View style={[styles.statusTag, isApproved ? styles.statusTagApproved : styles.statusTagPending]}>
-                    <Text style={[styles.statusTagText, isApproved ? styles.statusTagTextApproved : styles.statusTagTextPending]}>
-                      {w.verification_status}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.workerMetaText}>{w.email} • {w.phone}</Text>
-                <Text style={styles.workerServiceText}>
-                  {w.services?.join(", ") || "Home Service"} • {w.experience_years || 1} yrs exp
-                </Text>
+          {/* Search Bar */}
+          <View style={styles.denseSearchInputWrap}>
+            <Ionicons name="search" size={14} color={C.slate500} />
+            <TextInput
+              style={styles.denseSearchInput}
+              placeholder="Search by worker name, email or phone..."
+              placeholderTextColor={C.slate400}
+              value={adminSearch}
+              onChangeText={setAdminSearch}
+            />
+            {adminSearch ? (
+              <Pressable onPress={() => setAdminSearch("")}>
+                <Ionicons name="close-circle" size={14} color={C.slate500} />
+              </Pressable>
+            ) : null}
+          </View>
 
-                {isApproved && (
+          {adminWorkers.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="people-outline" size={32} color={C.slate400} />
+              <Text style={styles.emptyTitle}>No workers match your filter</Text>
+            </View>
+          ) : (
+            adminWorkers.map((w) => {
+              const isExpanded = !!expandedWorkers[w.id];
+              const isApproved = w.verification_status === "APPROVED";
+              const hasGps = w.latitude && w.longitude;
+
+              return (
+                <View key={w.id} style={styles.accordionCard}>
+                  {/* Accordion Compact Header */}
                   <Pressable
-                    style={({ pressed }) => [styles.btnTakeOffline, pressed && { backgroundColor: "#fee2e2" }]}
-                    onPress={() => handleUpdateWorkerStatus(w.id, "REJECTED")}
-                    disabled={actionLoadingId === w.id}
+                    style={styles.accordionHeader}
+                    onPress={() => toggleAccordion(w.id)}
                   >
-                    <Ionicons name="ban-outline" size={13} color="#dc2626" />
-                    <Text style={styles.btnTakeOfflineText}>Take Offline (Reject)</Text>
+                    <View style={styles.avatarPill}>
+                      <Text style={styles.avatarText}>{w.name?.[0]?.toUpperCase() || "W"}</Text>
+                    </View>
+
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text style={styles.workerName}>{w.name}</Text>
+                        <View style={isApproved ? styles.badgeApproved : styles.badgePending}>
+                          <Text style={isApproved ? styles.badgeApprovedText : styles.badgePendingText}>
+                            {w.verification_status}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.workerMeta}>
+                        {Array.isArray(w.services) ? w.services.join(", ") : w.services || "General Service"} • {w.city || "Bhopal"}
+                      </Text>
+                    </View>
+
+                    <Ionicons
+                      name={isExpanded ? "chevron-up" : "chevron-down"}
+                      size={16}
+                      color={C.slate500}
+                    />
                   </Pressable>
-                )}
-              </View>
-            );
-          })}
+
+                  {/* Accordion Expanded Details */}
+                  {isExpanded && (
+                    <View style={styles.accordionBody}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Email:</Text>
+                        <Text style={styles.detailValue}>{w.email}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Phone:</Text>
+                        <Text style={styles.detailValue}>{w.phone || "Not configured"}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Experience:</Text>
+                        <Text style={styles.detailValue}>{w.experience_years || 1} years</Text>
+                      </View>
+
+                      {/* Integrated Hardware GPS Pinpoint Chip */}
+                      {hasGps ? (
+                        <Pressable
+                          style={styles.gpsChipBox}
+                          onPress={() => handleOpenMaps(w.latitude, w.longitude)}
+                        >
+                          <Ionicons name="location" size={13} color="#047857" />
+                          <Text style={styles.gpsChipText}>
+                            📍 {Number(w.latitude).toFixed(4)}°, {Number(w.longitude).toFixed(4)}° (GPS Pinpoint)
+                          </Text>
+                          <Ionicons name="open-outline" size={12} color="#047857" />
+                        </Pressable>
+                      ) : (
+                        <Text style={styles.noGpsText}>No hardware GPS coordinates registered.</Text>
+                      )}
+
+                      {/* Actions */}
+                      <View style={styles.accordionActionRow}>
+                        {isApproved ? (
+                          <Pressable
+                            style={styles.btnSmallDanger}
+                            onPress={() => handleUpdateWorkerStatus(w.id, "REJECTED")}
+                            disabled={actionLoadingId === w.id}
+                          >
+                            <Ionicons name="ban-outline" size={12} color="#b91c1c" />
+                            <Text style={styles.btnSmallDangerText}>Take Offline (Decommission)</Text>
+                          </Pressable>
+                        ) : (
+                          <Pressable
+                            style={styles.btnSmallSuccess}
+                            onPress={() => handleUpdateWorkerStatus(w.id, "APPROVED")}
+                            disabled={actionLoadingId === w.id}
+                          >
+                            <Ionicons name="checkmark-circle-outline" size={12} color="#15803d" />
+                            <Text style={styles.btnSmallSuccessText}>Authorize & Approve</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          )}
         </View>
       ) : user.role === "WORKER" ? (
         /* ─────────────────────────────────────────────────────────────
-            3. WORKER VIEW
+            3. WORKER DASHBOARD LAUNCHER
             ───────────────────────────────────────────────────────────── */
-        <View style={styles.workerRedirectCard}>
-          <View style={styles.serviceIconBox}>
-            <Text style={{ fontSize: 26 }}>👷</Text>
+        <View style={styles.contentWrap}>
+          <View style={styles.enterpriseHero}>
+            <View style={styles.securityPill}>
+              <Ionicons name="briefcase" size={12} color={C.brand} />
+              <Text style={styles.securityPillText}>WORKER DASHBOARD</Text>
+            </View>
+            <Text style={styles.heroTitle}>Worker Operational Terminal</Text>
+            <Text style={styles.heroSubtitle}>
+              Broadcast live hardware GPS, manage availability state, and accept incoming service appointments.
+            </Text>
+            <Pressable
+              style={[styles.btnPrimary, { marginTop: 14 }]}
+              onPress={() => router.push("/worker-portal")}
+            >
+              <Text style={styles.btnPrimaryText}>Open Worker Dashboard</Text>
+            </Pressable>
           </View>
-          <Text style={styles.cardHeading}>Worker Dashboard</Text>
-          <Text style={styles.cardBody}>
-            Manage incoming customer booking requests, toggle online availability, and broadcast your live GPS.
-          </Text>
-          <Pressable
-            style={({ pressed }) => [styles.btnPrimary, pressed && styles.btnPrimaryHover]}
-            onPress={() => router.push("/worker-portal")}
-          >
-            <Text style={styles.btnPrimaryText}>Open Worker Dashboard</Text>
-          </Pressable>
         </View>
       ) : (
         /* ─────────────────────────────────────────────────────────────
-            4. AUTHENTICATED CUSTOMER DASHBOARD (Matches CustomerDashboard.jsx)
+            4. CUSTOMER VIEW (Minimalist Enterprise Option 3)
             ───────────────────────────────────────────────────────────── */
-        <View>
-          <Text style={styles.eyebrow}>CUSTOMER DASHBOARD</Text>
-          <Text style={styles.heroHeading}>Welcome, {user.name || "Customer"}</Text>
-          <Text style={styles.heroSubtitle}>
-            Find verified professionals near your current location.
-          </Text>
+        <View style={styles.contentWrap}>
+          {/* Header */}
+          <View style={styles.customerHeader}>
+            <Text style={styles.eyebrow}>CUSTOMER DASHBOARD</Text>
+            <Text style={styles.heroTitle}>Request Verified Services</Text>
+            <Text style={styles.heroSubtitle}>
+              Select a trade and search within your hardware GPS geofence radius.
+            </Text>
+          </View>
 
-          {/* Service Search Card */}
-          <View style={styles.dashboardSearchCard}>
-            <View style={styles.searchCardHeader}>
-              <View style={styles.serviceIconBox}>
-                <Text style={styles.serviceEmoji}>🔎</Text>
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.searchCardTitle}>Find a Worker</Text>
-                <Text style={styles.searchCardSubtitle}>
-                  Search verified workers who are online and available now.
-                </Text>
-              </View>
-            </View>
-
-            <Text style={styles.fieldLabel}>Service Category</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoryScroll}
-            >
+          {/* High-Density Category Selector */}
+          <View style={styles.denseCard}>
+            <Text style={styles.inputLabel}>SELECT SERVICE TRADE</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 8 }}>
               {services.map((cat) => {
-                const isActive = selectedService.toLowerCase() === (cat.name || "").toLowerCase();
+                const isSelected = selectedService === cat.name;
                 return (
                   <Pressable
                     key={cat.id || cat.name}
-                    style={({ pressed }) => [
-                      styles.serviceCard,
-                      isActive && styles.serviceCardActive,
-                      (pressed && !isActive) && styles.serviceCardHover,
-                    ]}
+                    style={[styles.categoryTile, isSelected && styles.categoryTileActive]}
                     onPress={() => setSelectedService(cat.name)}
                   >
-                    <View style={[styles.serviceIconBoxSmall, isActive && styles.serviceIconBoxActive]}>
-                      <Text style={styles.serviceEmojiSmall}>{getCategoryEmoji(cat.name)}</Text>
-                    </View>
-                    <Text style={[styles.serviceCardText, isActive && styles.serviceCardTextActive]}>
+                    <Text style={{ fontSize: 18 }}>{getCategoryEmoji(cat.name)}</Text>
+                    <Text style={[styles.categoryTileText, isSelected && styles.categoryTileTextActive]}>
                       {cat.name}
                     </Text>
                   </Pressable>
@@ -582,111 +647,134 @@ export default function HomeScreen() {
               })}
             </ScrollView>
 
-            <Text style={styles.fieldLabel}>Search Radius</Text>
-            <View style={styles.radiusBtns}>
-              {RADIUS_OPTIONS.map((r) => (
-                <Pressable
-                  key={r}
-                  style={({ pressed }) => [
-                    styles.radiusBtn,
-                    radius === r && styles.radiusBtnActive,
-                    (pressed && radius !== r) && { backgroundColor: "#e4f4e8" },
-                  ]}
-                  onPress={() => setRadius(r)}
-                >
-                  <Text style={[styles.radiusBtnText, radius === r && styles.radiusBtnTextActive]}>
-                    {r} km
-                  </Text>
-                </Pressable>
-              ))}
+            {/* Radius Segmented Control */}
+            <Text style={[styles.inputLabel, { marginTop: 8 }]}>SEARCH GEOFENCE RADIUS</Text>
+            <View style={styles.segmentedRow}>
+              {RADIUS_OPTIONS.map((r) => {
+                const isSelected = radius === r;
+                return (
+                  <Pressable
+                    key={r}
+                    style={[styles.segmentBtn, isSelected && styles.segmentBtnActive]}
+                    onPress={() => setRadius(r)}
+                  >
+                    <Text style={[styles.segmentBtnText, isSelected && styles.segmentBtnTextActive]}>
+                      {r} km
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <Pressable
-              style={({ pressed }) => [styles.btnPrimary, { marginTop: 16 }, pressed && styles.btnPrimaryHover, loading && styles.btnDisabled]}
+              style={[styles.btnPrimary, { marginTop: 14 }]}
               onPress={loadNearbyWorkers}
               disabled={loading}
             >
-              <Text style={styles.btnPrimaryText}>
-                {loading ? "Searching..." : "Find Nearby Workers"}
-              </Text>
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.btnPrimaryText}>
+                  Find Available {selectedService} Workers
+                </Text>
+              )}
             </Pressable>
           </View>
 
-          {/* Results section */}
-          <View style={styles.workerResultsHeader}>
-            <Text style={styles.sectionHeading}>
-              {hasSearched ? "Available Nearby Workers" : "Available Workers"}
+          {/* Results Section */}
+          <View style={[styles.sectionHeader, { marginTop: 20 }]}>
+            <Text style={styles.eyebrow}>VERIFIED PROFESSIONALS</Text>
+            <Text style={styles.sectionTitle}>
+              {workers.length} technician(s) within {radius} km
             </Text>
-            {hasSearched && (
-              <Text style={styles.heroSubtitle}>
-                {workers.length > 0
-                  ? `${workers.length} available ${selectedService} worker(s) found within ${radius} km.`
-                  : `No available ${selectedService} workers found within ${radius} km.`}
-              </Text>
-            )}
           </View>
 
           {loading ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color="#075c31" />
-              <Text style={styles.mutedText}>Finding nearest verified professionals...</Text>
+              <ActivityIndicator size="large" color={C.brand} />
+              <Text style={styles.loadingText}>Scanning geofence for verified technicians...</Text>
             </View>
-          ) : hasSearched && workers.length === 0 ? (
-            <View style={styles.emptyWorkerCard}>
-              <Ionicons name="search-outline" size={40} color="#94A3B8" />
-              <Text style={styles.emptyWorkerTitle}>No workers available yet</Text>
-              <Text style={styles.emptyWorkerDesc}>Try expanding your search radius or choose another category.</Text>
+          ) : workers.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="search-outline" size={32} color={C.slate400} />
+              <Text style={styles.emptyTitle}>No workers found within {radius} km</Text>
+              <Text style={styles.emptySub}>
+                Try expanding your geofence radius to 20 km or choose another category.
+              </Text>
             </View>
           ) : (
-            workers.map((worker) => (
-              <Pressable
-                key={worker.id || worker.user_id}
-                style={({ pressed }) => [styles.workerCard, pressed && styles.workerCardHover]}
-              >
-                <View style={styles.workerAvatar}>
-                  <Text style={styles.workerAvatarText}>
-                    {worker.name ? worker.name[0].toUpperCase() : "W"}
-                  </Text>
-                </View>
-                <View style={styles.workerCardBody}>
-                  <Text style={styles.workerName}>{worker.name}</Text>
-                  <Text style={styles.workerMeta}>{worker.service}</Text>
-                  <Text style={styles.workerMeta}>
-                    ⭐ {Number(worker.rating || 5.0).toFixed(1)} rating
-                  </Text>
-                  <Text style={styles.workerMeta}>
-                    📍 {worker.distanceKm ? `${Number(worker.distanceKm).toFixed(1)} km away` : "Nearby"}
-                  </Text>
-                  <Text style={styles.workerMeta}>
-                    ₹{worker.minimumCharge || worker.minimum_charge || 250} starting price
-                  </Text>
-                  <View style={styles.availableBadge}>
-                    <Text style={styles.availableBadgeText}>Available now</Text>
-                  </View>
+            workers.map((worker) => {
+              const isExpanded = !!expandedWorkers[worker.id];
+              const hasGps = worker.latitude && worker.longitude;
+
+              return (
+                <View key={worker.id} style={styles.accordionCard}>
+                  {/* Compact Header */}
                   <Pressable
-                    style={({ pressed }) => [styles.btnPrimary, styles.bookingAction, pressed && styles.btnPrimaryHover]}
-                    onPress={() => {
-                      router.push({
-                        pathname: `/book/${worker.id || worker.user_id}`,
-                        params: {
-                          serviceCategoryId: worker.serviceCategoryId || worker.service_category_id,
-                          serviceName: worker.service || selectedService,
-                          workerName: worker.name,
-                          minCharge: worker.minimumCharge || worker.minimum_charge || 250,
-                        },
-                      });
-                    }}
+                    style={styles.accordionHeader}
+                    onPress={() => toggleAccordion(worker.id)}
                   >
-                    <Text style={styles.btnPrimaryText}>Book {worker.name}</Text>
+                    <View style={styles.avatarPill}>
+                      <Text style={styles.avatarText}>{worker.name?.[0]?.toUpperCase() || "W"}</Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={styles.workerName}>{worker.name}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                        <Text style={styles.ratingBadge}>★ {worker.rating || "5.0"}</Text>
+                        <Text style={styles.distanceBadge}>
+                          📍 {worker.distance_km ? `${worker.distance_km} km away` : "Nearby"}
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons
+                      name={isExpanded ? "chevron-up" : "chevron-down"}
+                      size={16}
+                      color={C.slate500}
+                    />
                   </Pressable>
+
+                  {/* Expanded Accordion Body */}
+                  {isExpanded && (
+                    <View style={styles.accordionBody}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Specialty:</Text>
+                        <Text style={styles.detailValue}>{worker.service || selectedService}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Starting Rate:</Text>
+                        <Text style={styles.detailValue}>₹{worker.minimum_charge || 250} min. charge</Text>
+                      </View>
+
+                      {/* Integrated GPS Pinpoint Chip */}
+                      {hasGps && (
+                        <Pressable
+                          style={styles.gpsChipBox}
+                          onPress={() => handleOpenMaps(worker.latitude, worker.longitude)}
+                        >
+                          <Ionicons name="location" size={13} color="#047857" />
+                          <Text style={styles.gpsChipText}>
+                            📍 {Number(worker.latitude).toFixed(4)}°, {Number(worker.longitude).toFixed(4)}° (Exact Pinpoint)
+                          </Text>
+                          <Ionicons name="open-outline" size={12} color="#047857" />
+                        </Pressable>
+                      )}
+
+                      <Pressable
+                        style={[styles.btnPrimary, { marginTop: 12 }]}
+                        onPress={() => router.push(`/book/${worker.id}`)}
+                      >
+                        <Text style={styles.btnPrimaryText}>Schedule Appointment</Text>
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
-              </Pressable>
-            ))
+              );
+            })
           )}
         </View>
       )}
 
-      <View style={{ height: 48 }} />
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
@@ -694,453 +782,614 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#effaf3",
+    backgroundColor: C.bgPage,
+  },
+  contentWrap: {
     padding: 16,
   },
-  locationCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 12,
+
+  // ── Enterprise GPS Hardware Bar ──
+  gpsBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    marginBottom: 20,
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 18,
-    elevation: 2,
-  },
-  locationInfo: { flexDirection: "row", alignItems: "center", flex: 1 },
-  locationLabel: { fontSize: 11, color: "#61726a", fontWeight: "600" },
-  locationValue: { fontSize: 14, color: "#102a1c", fontWeight: "700", marginTop: 2 },
-  refreshLocBtn: {
-    backgroundColor: "#e4f4e8",
-    padding: 8,
-    borderRadius: 8,
-    marginLeft: 8,
-  },
-  guestSection: { marginTop: 4 },
-  eyebrow: {
-    color: "#08713d",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-    marginBottom: 4,
-    textTransform: "uppercase",
-  },
-  heroHeading: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#102a1c",
-    lineHeight: 32,
-    marginBottom: 8,
-  },
-  heroSubtitle: {
-    color: "#61726a",
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  heroActionRow: { flexDirection: "row", gap: 12, marginBottom: 24 },
-  heroActionBtn: { flex: 1 },
-  popularCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.08,
-    shadowRadius: 32,
-    elevation: 3,
-    marginBottom: 24,
-  },
-  cardSectionTitle: { fontSize: 18, fontWeight: "800", color: "#102a1c", marginBottom: 16 },
-  quickServiceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
+    backgroundColor: C.bgCard,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderBottomWidth: 1,
-    borderBottomColor: "#edf2ee",
-    gap: 12,
+    borderBottomColor: C.border,
+    gap: 8,
   },
-  quickIconBox: {
-    width: 44,
-    height: 44,
-    backgroundColor: "#e4f4e8",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
+  gpsDotPulse: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "#10b981",
   },
-  quickServiceTitle: { fontSize: 14, fontWeight: "700", color: "#102a1c" },
-  quickServiceText: { fontSize: 12, color: "#61726a", marginTop: 2 },
-  processSection: { marginVertical: 12 },
-  processCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
+  gpsBarText: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: "monospace",
+    color: C.slate700,
+  },
+
+  // ── Hero & Headers ──
+  enterpriseHero: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.lg,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#e1e8e3",
-    marginBottom: 12,
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.05,
-    shadowRadius: 20,
-    elevation: 2,
+    borderColor: C.border,
+    marginBottom: 16,
+    ...SHADOW.card,
   },
-  stepNumberBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#e4f4e8",
+  securityPill: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    alignSelf: "flex-start",
+    backgroundColor: C.brandLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.xs,
+    gap: 5,
+    marginBottom: 8,
+  },
+  securityPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: C.brand,
+    letterSpacing: 0.5,
+  },
+  heroTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: C.slate900,
+    marginBottom: 6,
+  },
+  heroSubtitle: {
+    fontSize: 12,
+    color: C.slate600,
+    lineHeight: 18,
+  },
+  heroBtnRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+  customerHeader: {
+    marginBottom: 14,
+  },
+  adminHeader: {
+    marginBottom: 14,
+  },
+  eyebrow: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: C.brand,
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  sectionHeader: {
     marginBottom: 10,
   },
-  stepNumberText: { fontSize: 16, fontWeight: "800", color: "#075c31" },
-  processStepTitle: { fontSize: 15, fontWeight: "700", color: "#102a1c", marginBottom: 4 },
-  processStepDesc: { fontSize: 13, color: "#61726a", lineHeight: 18 },
-  workerCalloutCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.08,
-    shadowRadius: 32,
-    elevation: 3,
-    marginVertical: 12,
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: C.slate900,
   },
-  workerCalloutTitle: { fontSize: 20, fontWeight: "800", color: "#102a1c", marginVertical: 6 },
-  workerCalloutText: { fontSize: 13, color: "#61726a", lineHeight: 19, marginBottom: 16 },
-  siteFooter: {
-    marginTop: 24,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    backgroundColor: "#10291a",
-    borderRadius: 14,
-    alignItems: "center",
-  },
-  footerText: { color: "#d6e5d8", fontSize: 12, textAlign: "center" },
-  footerCredit: { color: "#a9cbb0", fontSize: 11, marginTop: 4, textAlign: "center" },
 
-  // ── Admin Dashboard Styles ──
-  adminSummaryGrid: {
+  // ── High-Density 2x2 Metric Grid ──
+  metricGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  summaryCard: {
-    flex: 1,
-    minWidth: "45%",
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
+  metricTile: {
+    width: "48.5%",
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderTopWidth: 3,
+    ...SHADOW.card,
+  },
+  metricLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: C.slate500,
+    letterSpacing: 0.5,
+  },
+  metricValue: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: C.slate900,
+    marginTop: 3,
+  },
+  metricSub: {
+    fontSize: 10,
+    color: C.slate500,
+    marginTop: 2,
+  },
+
+  // ── STRIDE Security Banner ──
+  strideSecurityCard: {
+    backgroundColor: "#f0f9ff",
+    borderRadius: RADIUS.md,
     padding: 14,
     borderWidth: 1,
-    borderColor: "rgba(151,190,160,0.5)",
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
+    borderColor: "#bae6fd",
+    marginBottom: 14,
   },
-  summaryCardIcon: { fontSize: 22, marginBottom: 6 },
-  summaryCardVal: { fontSize: 24, fontWeight: "800", color: "#102a1c" },
-  summaryCardTitle: { fontSize: 11, color: "#61726a", fontWeight: "700", marginTop: 2 },
-  securityBannerCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#075c31",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 20,
-    shadowColor: "#075c31",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 14,
-    elevation: 3,
+  strideTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0369a1",
   },
-  securityBannerLeft: { flexDirection: "row", alignItems: "center", flex: 1, gap: 12 },
-  shieldIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
+  statusPillLive: {
+    backgroundColor: "#dcfce7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.xs,
   },
-  securityBannerTitle: { color: "#ffffff", fontSize: 14, fontWeight: "800" },
-  securityBannerSubtitle: { color: "#d6e5d8", fontSize: 11, marginTop: 2, lineHeight: 15 },
-  securityBannerArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#ffffff",
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 8,
+  statusPillLiveText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#15803d",
   },
-  sectionHeaderBlock: { marginTop: 14, marginBottom: 8 },
-  sectionHeading: { fontSize: 19, fontWeight: "800", color: "#102a1c", marginBottom: 2 },
-  sectionSubtitleText: { fontSize: 12, color: "#61726a", marginBottom: 10 },
-  emptyCardContainer: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    padding: 20,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    marginBottom: 16,
+  strideSubtitle: {
+    fontSize: 11,
+    color: "#0c4a6e",
+    marginTop: 4,
+    lineHeight: 16,
   },
-  emptyCardTitleText: { fontSize: 14, fontWeight: "700", color: "#102a1c", marginTop: 6 },
-  emptyCardSubText: { fontSize: 12, color: "#61726a", marginTop: 2, textAlign: "center" },
-  workerManageCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(151,190,160,0.5)",
-    marginBottom: 12,
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
-    shadowRadius: 16,
-    elevation: 2,
-  },
-  workerCardTop: { flexDirection: "row", alignItems: "center" },
-  workerNameText: { fontSize: 15, fontWeight: "700", color: "#102a1c" },
-  workerMetaText: { fontSize: 12, color: "#61726a", marginTop: 2 },
-  workerServiceText: { fontSize: 12, color: "#075c31", fontWeight: "600", marginTop: 2 },
-  pendingBadge: {
-    backgroundColor: "#fff3cf",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  pendingBadgeText: { color: "#8b5c00", fontSize: 10, fontWeight: "800" },
-  workerBioText: { fontSize: 12, color: "#475569", fontStyle: "italic", marginTop: 8 },
-  actionButtonsRow: { flexDirection: "row", gap: 10, marginTop: 12 },
-  btnReject: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 8,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#dba2a2",
-    alignItems: "center",
-  },
-  btnRejectHover: { backgroundColor: "#fee2e2" },
-  btnRejectText: { color: "#dc2626", fontWeight: "700", fontSize: 13 },
-  btnApprove: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 8,
-    backgroundColor: "#075c31",
-    alignItems: "center",
-  },
-  btnApproveHover: { backgroundColor: "#064a28" },
-  btnApproveText: { color: "#ffffff", fontWeight: "800", fontSize: 13 },
-  serviceCountsScroll: { gap: 10, paddingBottom: 10 },
-  serviceCountCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    padding: 14,
-    minWidth: 130,
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-  },
-  serviceCountName: { fontSize: 13, fontWeight: "700", color: "#102a1c" },
-  serviceCountTotal: { fontSize: 12, color: "#075c31", fontWeight: "700", marginTop: 4 },
-  serviceCountBreakdown: { fontSize: 10, color: "#61726a", marginTop: 2 },
-  workerDirectoryCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    marginBottom: 8,
-  },
-  statusTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
-  statusTagApproved: { backgroundColor: "#ddf2e4" },
-  statusTagPending: { backgroundColor: "#fff3cf" },
-  statusTagText: { fontSize: 10, fontWeight: "800" },
-  statusTagTextApproved: { color: "#076332" },
-  statusTagTextPending: { color: "#8b5c00" },
-  btnTakeOffline: {
+  strideActionRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    alignSelf: "flex-start",
-    marginTop: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#fca5a5",
-  },
-  btnTakeOfflineText: { fontSize: 11, color: "#dc2626", fontWeight: "600" },
-
-  // ── Worker view ──
-  workerRedirectCard: {
-    padding: 24,
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
     marginTop: 8,
   },
-  cardHeading: { fontSize: 18, fontWeight: "800", color: "#102a1c", marginTop: 10, marginBottom: 6 },
-  cardBody: { fontSize: 13, color: "#61726a", lineHeight: 19, marginBottom: 16 },
-
-  // ── Customer View Styles ──
-  dashboardSearchCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "rgba(151,190,160,0.5)",
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 30,
-    elevation: 3,
-    marginBottom: 20,
+  strideActionLink: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0369a1",
   },
-  searchCardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
-  searchCardTitle: { fontSize: 18, fontWeight: "800", color: "#102a1c" },
-  searchCardSubtitle: { fontSize: 12, color: "#61726a", marginTop: 2 },
-  fieldLabel: { fontSize: 13, fontWeight: "700", color: "#234534", marginBottom: 8, marginTop: 10 },
-  categoryScroll: { paddingBottom: 8, gap: 8 },
-  serviceCard: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    borderRadius: 14,
+
+  // ── Telemetry Tiles ──
+  hScroll: {
+    marginBottom: 14,
+  },
+  serviceTelemetryTile: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
     padding: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginRight: 10,
+    minWidth: 120,
+    ...SHADOW.card,
+  },
+  telemetryName: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.slate800,
+    marginTop: 6,
+  },
+  telemetryCount: {
+    fontSize: 11,
+    color: C.slate600,
+    marginTop: 2,
+  },
+  telemetryBreakdown: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: C.slate100,
+  },
+  telemetryApproved: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#15803d",
+  },
+  telemetryPending: {
+    fontSize: 9,
+    color: "#b45309",
+  },
+
+  // ── High-Density Accordion Card ──
+  accordionCard: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: 8,
+    overflow: "hidden",
+    ...SHADOW.card,
+  },
+  accordionHeader: {
+    flexDirection: "row",
     alignItems: "center",
-    minWidth: 92,
+    padding: 12,
+  },
+  avatarPill: {
+    width: 34,
+    height: 34,
+    borderRadius: RADIUS.sm,
+    backgroundColor: C.brandLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: C.brand,
+  },
+  workerName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: C.slate900,
+  },
+  workerMeta: {
+    fontSize: 11,
+    color: C.slate500,
+    marginTop: 1,
+  },
+  workerServiceTag: {
+    fontSize: 11,
+    color: C.brand,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  accordionBody: {
+    padding: 12,
+    paddingTop: 0,
+    borderTopWidth: 1,
+    borderTopColor: C.slate100,
+    backgroundColor: C.slate50,
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+  },
+  detailLabel: {
+    fontSize: 11,
+    color: C.slate500,
+  },
+  detailValue: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: C.slate800,
+  },
+  gpsChipBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#ecfdf5",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: RADIUS.xs,
+    borderWidth: 1,
+    borderColor: "#a7f3d0",
+    marginTop: 6,
+  },
+  gpsChipText: {
+    fontSize: 10,
+    fontFamily: "monospace",
+    color: "#047857",
+    fontWeight: "700",
+    flex: 1,
+  },
+  noGpsText: {
+    fontSize: 10,
+    color: C.slate400,
+    fontStyle: "italic",
+    marginTop: 4,
+  },
+  accordionActionRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  btnSmallDanger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#fef2f2",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.xs,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  btnSmallDangerText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#b91c1c",
+  },
+  btnSmallSuccess: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#f0fdf4",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.xs,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  btnSmallSuccessText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#15803d",
+  },
+
+  // ── Pending Cards ──
+  pendingCard: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    padding: 12,
+    marginBottom: 8,
+  },
+  pendingCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  badgePending: {
+    backgroundColor: "#fef3c7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.xs,
+  },
+  badgePendingText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#b45309",
+  },
+  badgeApproved: {
+    backgroundColor: "#dcfce7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.xs,
+  },
+  badgeApprovedText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#15803d",
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  btnAction: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: RADIUS.xs,
+    alignItems: "center",
+  },
+  btnReject: {
+    backgroundColor: "#fee2e2",
+  },
+  btnRejectText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#b91c1c",
+  },
+  btnApprove: {
+    backgroundColor: C.brand,
+  },
+  btnApproveText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+
+  // ── Dense Card & Controls ──
+  denseCard: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+    ...SHADOW.card,
+  },
+  inputLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: C.slate600,
+    letterSpacing: 0.5,
+  },
+  categoryTile: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: C.slate50,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: C.border,
     marginRight: 8,
   },
-  serviceCardActive: { borderColor: "#075c31", backgroundColor: "#f7fcf8", borderWidth: 1.5 },
-  serviceCardHover: { borderColor: "#78ad87" },
-  serviceIconBox: {
-    width: 48,
-    height: 48,
-    backgroundColor: "#e4f4e8",
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
+  categoryTileActive: {
+    backgroundColor: C.brandLight,
+    borderColor: C.brand,
   },
-  serviceIconBoxSmall: {
-    width: 40,
-    height: 40,
-    backgroundColor: "#e4f4e8",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
+  categoryTileText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.slate700,
   },
-  serviceIconBoxActive: { backgroundColor: "#cfeeda" },
-  serviceEmoji: { fontSize: 22 },
-  serviceEmojiSmall: { fontSize: 20 },
-  serviceCardText: { fontSize: 12, fontWeight: "700", color: "#234534", textAlign: "center" },
-  serviceCardTextActive: { color: "#075c31" },
-  radiusBtns: { flexDirection: "row", gap: 8 },
-  radiusBtn: {
-    flex: 1,
-    backgroundColor: "#f1f5f9",
-    paddingVertical: 9,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    alignItems: "center",
+  categoryTileTextActive: {
+    color: C.brand,
   },
-  radiusBtnActive: { backgroundColor: "#075c31", borderColor: "#075c31" },
-  radiusBtnText: { fontSize: 13, fontWeight: "700", color: "#475569" },
-  radiusBtnTextActive: { color: "#ffffff" },
-  btnPrimary: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 46,
-    paddingHorizontal: 20,
-    backgroundColor: "#075c31",
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  btnPrimaryHover: { backgroundColor: "#064a28" },
-  btnDisabled: { opacity: 0.65 },
-  btnPrimaryText: { color: "#ffffff", fontWeight: "800", fontSize: 14 },
-  btnOutline: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 46,
-    paddingHorizontal: 20,
-    backgroundColor: "#ffffff",
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "#075c31",
-  },
-  btnOutlineText: { color: "#075c31", fontWeight: "800", fontSize: 14 },
-  workerResultsHeader: { marginTop: 10, marginBottom: 8 },
-  loadingBox: { padding: 36, alignItems: "center" },
-  mutedText: { color: "#61726a", fontSize: 13, marginTop: 10 },
-  emptyWorkerCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 28,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e1e8e3",
-    marginTop: 8,
-  },
-  emptyWorkerTitle: { fontSize: 16, fontWeight: "700", color: "#102a1c", marginTop: 8 },
-  emptyWorkerDesc: { fontSize: 13, color: "#61726a", textAlign: "center", marginTop: 4 },
-  workerCard: {
+  segmentedRow: {
     flexDirection: "row",
-    gap: 14,
-    padding: 18,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "rgba(151,190,160,0.5)",
-    borderRadius: 16,
-    marginBottom: 12,
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 20,
-    elevation: 2,
+    gap: 6,
+    marginTop: 6,
   },
-  workerCardHover: { borderColor: "#78ad87", shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.12 },
-  workerAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#ddf2e4",
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: "center",
+    backgroundColor: C.slate100,
+    borderRadius: RADIUS.xs,
+  },
+  segmentBtnActive: {
+    backgroundColor: C.brand,
+  },
+  segmentBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: C.slate600,
+  },
+  segmentBtnTextActive: {
+    color: "#FFFFFF",
+  },
+  denseSearchInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+    height: 38,
+    gap: 8,
+    marginBottom: 10,
+  },
+  denseSearchInput: {
+    flex: 1,
+    fontSize: 12,
+    color: C.slate900,
+  },
+
+  // ── Rating & Distance Badges ──
+  ratingBadge: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#b45309",
+    backgroundColor: "#fef3c7",
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: RADIUS.xs,
+  },
+  distanceBadge: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#047857",
+  },
+
+  // ── Services & Process Rows (Guest) ──
+  serviceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: C.slate100,
+  },
+  serviceRowTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: C.slate900,
+  },
+  serviceRowSub: {
+    fontSize: 11,
+    color: C.slate500,
+    marginTop: 1,
+  },
+  processItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: C.slate100,
+  },
+  processStepBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: RADIUS.xs,
+    backgroundColor: C.brandLight,
     alignItems: "center",
     justifyContent: "center",
   },
-  workerAvatarText: { color: "#075c31", fontSize: 20, fontWeight: "800" },
-  workerCardBody: { flex: 1 },
-  workerName: { fontSize: 16, fontWeight: "700", color: "#102a1c", marginBottom: 4 },
-  workerMeta: { fontSize: 13, color: "#61726a", marginBottom: 3 },
-  availableBadge: {
-    alignSelf: "flex-start",
-    marginTop: 6,
-    marginBottom: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: "#ddf2e4",
-    borderRadius: 999,
+  processStepText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: C.brand,
   },
-  availableBadgeText: { color: "#076332", fontSize: 11, fontWeight: "800" },
-  bookingAction: { marginTop: 6, alignSelf: "flex-start", paddingHorizontal: 16, minHeight: 38 },
+  processTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.slate800,
+  },
+  processDesc: {
+    fontSize: 11,
+    color: C.slate500,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+
+  // ── Buttons & State ──
+  btnPrimary: {
+    backgroundColor: C.brand,
+    borderRadius: RADIUS.sm,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnPrimaryText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  btnOutline: {
+    backgroundColor: "transparent",
+    borderRadius: RADIUS.sm,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: C.brand,
+  },
+  btnOutlineText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: C.brand,
+  },
+  btnPressed: {
+    opacity: 0.85,
+  },
+  loadingBox: {
+    padding: 30,
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 11,
+    color: C.slate500,
+  },
+  emptyCard: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  emptyTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: C.slate800,
+    marginTop: 6,
+  },
+  emptySub: {
+    fontSize: 11,
+    color: C.slate500,
+    textAlign: "center",
+    marginTop: 2,
+  },
 });

@@ -1,6 +1,6 @@
 /**
- * ProxiFix Design System — mirrors index.css exactly
- * All colors, radii, shadows match the website's CSS tokens
+ * ProxiFix Design System — Option 3: Minimalist Enterprise & Security Focus
+ * High-density metrics, STRIDE badge highlights, fast accordion cards, and integrated mini-map coordinates.
  */
 
 export const C = {
@@ -8,96 +8,102 @@ export const C = {
   brand: "#075c31",
   brandDark: "#064a28",
   brandDeep: "#08713d",
+  brandLight: "#ddf2e4",
+  brandSubtle: "#effaf3",
 
-  // Backgrounds (website gradient equivalents)
-  bgPage: "#effaf3",       // body bg start
+  // Enterprise Dark & Slate
+  slate900: "#0f172a",
+  slate800: "#1e293b",
+  slate700: "#334155",
+  slate600: "#475569",
+  slate500: "#64748b",
+  slate400: "#94a3b8",
+  slate200: "#e2e8f0",
+  slate100: "#f1f5f9",
+  slate50: "#f8fafc",
+
+  // Backgrounds
+  bgPage: "#f4f8f5",
   bgCard: "#ffffff",
-  bgCardGradient1: "rgba(247,253,248,0.98)",  // card odd
-  bgCardGradient2: "rgba(255,251,231,0.94)",  // card odd
-  bgCardEven1: "rgba(250,253,244,0.98)",       // card even
-  bgCardEven2: "rgba(239,250,246,0.96)",       // card even
+  bgSurface: "#f8fafc",
 
   // Text
-  textHeading: "#102a1c",
-  textBody: "#61726a",
-  textStrong: "#234534",
+  textHeading: "#0f172a",
+  textBody: "#475569",
+  textStrong: "#1e293b",
   textLink: "#075c31",
+  textMuted: "#64748b",
 
   // Borders
-  border: "#e1e8e3",
-  borderHover: "#78ad87",
+  border: "#e2e8f0",
+  borderDark: "#cbd5e1",
   borderBrand: "#97bea0",
+  borderFocus: "#075c31",
 
-  // Status badges (matches .status-approved / .status-pending / .status-rejected)
-  badgeApprovedBg: "#ddf2e4",
-  badgeApprovedText: "#076332",
-  badgePendingBg: "#fff3cf",
-  badgePendingText: "#8b5c00",
-  badgeRejectedBg: "#fee4e2",
-  badgeRejectedText: "#a61b1b",
+  // Status Badges
+  statusApprovedBg: "#dcfce7",
+  statusApprovedText: "#15803d",
+  statusPendingBg: "#fef3c7",
+  statusPendingText: "#b45309",
+  statusRejectedBg: "#fee2e2",
+  statusRejectedText: "#b91c1c",
 
-  // Service icon bg
-  serviceIconBg: "#e4f4e8",
-  serviceIconBgHover: "#cfeeda",
+  // STRIDE Threat Model Vectors
+  strideS: { bg: "#e0f2fe", text: "#0369a1", border: "#bae6fd", name: "Spoofing" },
+  strideT: { bg: "#ffedd5", text: "#c2410c", border: "#fed7aa", name: "Tampering" },
+  strideR: { bg: "#f3e8ff", text: "#7e22ce", border: "#e9d5ff", name: "Repudiation" },
+  strideI: { bg: "#ecfdf5", text: "#047857", border: "#a7f3d0", name: "Info Disclosure" },
+  strideD: { bg: "#fee2e2", text: "#b91c1c", border: "#fecaca", name: "Denial of Service" },
+  strideE: { bg: "#fdf2f8", text: "#be185d", border: "#fbcfe8", name: "Privilege Elevation" },
 
-  // Avatar
-  avatarBg: "#ddf2e4",
-  avatarText: "#075c31",
+  // GPS & Map Accents
+  gpsBg: "#ecfdf5",
+  gpsText: "#047857",
+  gpsBorder: "#86efac",
+  ipBg: "#f0f9ff",
+  ipText: "#0284c7",
+  ipBorder: "#bae6fd",
 
-  // Available badge
-  availableBg: "#ddf2e4",
-  availableText: "#076332",
-
-  // Form
-  inputBorder: "#bdccc3",
-  inputFocusBorder: "#08713d",
+  // Forms
+  inputBorder: "#cbd5e1",
+  inputFocusBorder: "#075c31",
   inputBg: "#ffffff",
 
-  // Notification
-  notifUnreadBg: "#eefaf0",
-  notifCount: "#075c31",
-
   // Shadows
-  shadowCard: "rgba(17,66,38,0.05)",
-  shadowCardHover: "rgba(17,66,38,0.15)",
-  shadowHero: "rgba(17,66,38,0.10)",
-
-  // Error / success
-  errorBg: "#fee4e2",
-  errorText: "#b42318",
-  successBg: "#ddf2e4",
-  successText: "#076332",
-
-  // Muted
-  muted: "#61726a",
-  mutedLight: "#94A3B8",
-
-  // Eyebrow (uppercase label)
-  eyebrow: "#08713d",
+  shadowSm: "rgba(15, 23, 42, 0.04)",
+  shadowMd: "rgba(15, 23, 42, 0.08)",
+  shadowLg: "rgba(15, 23, 42, 0.12)",
 };
 
 export const RADIUS = {
-  sm: 8,
-  md: 10,
-  lg: 14,
+  xs: 4,
+  sm: 6,
+  md: 8,
+  lg: 12,
   xl: 16,
-  xxl: 20,
   pill: 999,
 };
 
 export const SHADOW = {
   card: {
-    shadowColor: "#11423620",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 1,
-    shadowRadius: 30,
-    elevation: 4,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardHover: {
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 22 },
-    shadowOpacity: 0.15,
-    shadowRadius: 38,
-    elevation: 8,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  modal: {
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.2,
+    shadowRadius: 32,
+    elevation: 10,
   },
 };

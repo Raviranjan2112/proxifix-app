@@ -10,6 +10,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
+import { C, RADIUS, SHADOW } from "../../constants/theme";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -32,25 +33,24 @@ export default function ProfileScreen() {
   if (!user) {
     return (
       <View style={styles.guestContainer}>
-        {/* hero-card style */}
-        <View style={styles.heroCard}>
-          <View style={styles.serviceIconBox}>
-            <Text style={{ fontSize: 32 }}>👤</Text>
+        <View style={styles.enterpriseHero}>
+          <View style={styles.securityPill}>
+            <Ionicons name="person-outline" size={12} color={C.brand} />
+            <Text style={styles.securityPillText}>AUTHENTICATION</Text>
           </View>
-          <Text style={styles.eyebrow}>WELCOME</Text>
-          <Text style={styles.heading}>Welcome to ProxiFix</Text>
-          <Text style={styles.muted}>
+          <Text style={styles.heroTitle}>ProxiFix Identity & Access</Text>
+          <Text style={styles.heroSubtitle}>
             Sign in or create an account to book verified local workers, track bookings, or manage your service provider profile.
           </Text>
           <View style={styles.heroActions}>
             <Pressable
-              style={({ pressed }) => [styles.btnPrimary, styles.heroBtn, pressed && styles.btnPrimaryHover]}
+              style={styles.btnPrimary}
               onPress={() => router.push("/login")}
             >
               <Text style={styles.btnPrimaryText}>Sign In</Text>
             </Pressable>
             <Pressable
-              style={({ pressed }) => [styles.btnOutline, styles.heroBtn, pressed && { backgroundColor: "#e4f4e8" }]}
+              style={styles.btnOutline}
               onPress={() => router.push("/register")}
             >
               <Text style={styles.btnOutlineText}>Create New Account</Text>
@@ -63,24 +63,24 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Profile Card — matches .worker-card with avatar */}
+      {/* Enterprise Identity Card */}
       <View style={styles.profileCard}>
-        <View style={styles.workerAvatar}>
-          <Text style={styles.workerAvatarText}>
+        <View style={styles.avatarPill}>
+          <Text style={styles.avatarText}>
             {user.name ? user.name[0].toUpperCase() : "U"}
           </Text>
         </View>
         <View style={styles.infoCol}>
-          <Text style={styles.workerName}>{user.name}</Text>
-          <Text style={styles.workerMeta}>{user.email}</Text>
-          {user.phone && <Text style={styles.workerMeta}>{user.phone}</Text>}
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusBadgeText}>{user.role}</Text>
+          <Text style={styles.userName}>{user.name}</Text>
+          <Text style={styles.userEmail}>{user.email}</Text>
+          {user.phone && <Text style={styles.userMeta}>📞 {user.phone}</Text>}
+          <View style={styles.roleBadge}>
+            <Text style={styles.roleBadgeText}>ROLE: {user.role}</Text>
           </View>
         </View>
       </View>
 
-      {/* Role Portals */}
+      {/* Role Tools */}
       {user.role === "WORKER" && (
         <View style={styles.section}>
           <Text style={styles.eyebrow}>WORKER TOOLS</Text>
@@ -88,14 +88,14 @@ export default function ProfileScreen() {
             style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemHover]}
             onPress={() => router.push("/worker-portal")}
           >
-            <View style={[styles.serviceIconBox, { backgroundColor: "#ddf2e4", width: 42, height: 42 }]}>
-              <Ionicons name="briefcase" size={20} color="#075c31" />
+            <View style={styles.menuIconBox}>
+              <Ionicons name="briefcase" size={18} color={C.brand} />
             </View>
             <View style={styles.menuContent}>
               <Text style={styles.menuTitle}>Worker Dashboard</Text>
-              <Text style={styles.menuSubtitle}>Manage incoming jobs, online toggle & live GPS</Text>
+              <Text style={styles.menuSubtitle}>Manage incoming dispatches, online availability & live GPS</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            <Ionicons name="chevron-forward" size={16} color={C.slate400} />
           </Pressable>
         </View>
       )}
@@ -107,59 +107,74 @@ export default function ProfileScreen() {
             style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemHover]}
             onPress={() => router.push("/admin-portal")}
           >
-            <View style={[styles.serviceIconBox, { backgroundColor: "#ddf2e4", width: 42, height: 42 }]}>
-              <Ionicons name="shield-checkmark" size={20} color="#075c31" />
+            <View style={styles.menuIconBox}>
+              <Ionicons name="shield-checkmark" size={18} color={C.brand} />
             </View>
             <View style={styles.menuContent}>
               <Text style={styles.menuTitle}>Security & Audit Center</Text>
-              <Text style={styles.menuSubtitle}>Review IP audits, approve workers & manage blocks</Text>
+              <Text style={styles.menuSubtitle}>Real-time IP lookup, worker approval pipeline & audit trail</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            <Ionicons name="chevron-forward" size={16} color={C.slate400} />
           </Pressable>
         </View>
       )}
 
-      {/* Settings */}
+      {/* Security Telemetry & System Info */}
       <View style={styles.section}>
-        <Text style={styles.eyebrow}>PREFERENCES & ABOUT</Text>
+        <Text style={styles.eyebrow}>SECURITY TELEMETRY & SYSTEM</Text>
 
         <View style={styles.menuItem}>
-          <View style={[styles.serviceIconBox, { backgroundColor: "#f1f5f9", width: 42, height: 42 }]}>
-            <Ionicons name="shield-outline" size={20} color="#475569" />
+          <View style={[styles.menuIconBox, { backgroundColor: C.slate100 }]}>
+            <Ionicons name="shield-checkmark-outline" size={18} color="#0284c7" />
           </View>
           <View style={styles.menuContent}>
-            <Text style={styles.menuTitle}>Security & Encryption</Text>
-            <Text style={styles.menuSubtitle}>TLS/SSL, STRIDE Non-Repudiation</Text>
+            <Text style={styles.menuTitle}>Zero-Trust & STRIDE Non-Repudiation</Text>
+            <Text style={styles.menuSubtitle}>Cryptographic request signatures & SQLite immutable logging</Text>
+          </View>
+          <View style={styles.statusLivePill}>
+            <Text style={styles.statusLiveText}>VERIFIED</Text>
           </View>
         </View>
 
         <View style={styles.menuItem}>
-          <View style={[styles.serviceIconBox, { backgroundColor: "#f1f5f9", width: 42, height: 42 }]}>
-            <Ionicons name="information-circle-outline" size={20} color="#475569" />
+          <View style={[styles.menuIconBox, { backgroundColor: C.slate100 }]}>
+            <Ionicons name="hardware-chip-outline" size={18} color="#15803d" />
           </View>
           <View style={styles.menuContent}>
-            <Text style={styles.menuTitle}>App Version</Text>
-            <Text style={styles.menuSubtitle}>v1.0.0 (ProxiFix Mobile Native)</Text>
+            <Text style={styles.menuTitle}>Hardware Device GPS Pinpoint</Text>
+            <Text style={styles.menuSubtitle}>WGS84 high-precision device coordinate streaming</Text>
+          </View>
+          <View style={styles.statusLivePill}>
+            <Text style={styles.statusLiveText}>ACTIVE</Text>
+          </View>
+        </View>
+
+        <View style={styles.menuItem}>
+          <View style={[styles.menuIconBox, { backgroundColor: C.slate100 }]}>
+            <Ionicons name="information-circle-outline" size={18} color={C.slate600} />
+          </View>
+          <View style={styles.menuContent}>
+            <Text style={styles.menuTitle}>ProxiFix Client Version</Text>
+            <Text style={styles.menuSubtitle}>v1.0.0-enterprise • Expo SDK 57 Native</Text>
           </View>
         </View>
       </View>
 
-      {/* Sign Out — .btn-danger style */}
+      {/* Sign Out Button */}
       <Pressable
         style={({ pressed }) => [styles.logoutBtn, pressed && styles.logoutBtnHover]}
         onPress={handleLogout}
       >
-        <Ionicons name="log-out-outline" size={18} color="#a61b1b" />
-        <Text style={styles.logoutBtnText}>Sign Out</Text>
+        <Ionicons name="log-out-outline" size={16} color="#b91c1c" />
+        <Text style={styles.logoutBtnText}>Sign Out of ProxiFix Session</Text>
       </Pressable>
 
-      {/* Site footer matching .site-footer */}
       <View style={styles.footer}>
-        <Text style={styles.footerText}>© 2026 ProxiFix. Trusted home services made simple.</Text>
-        <Text style={styles.footerCredit}>Crafted by Ravi Ranjan Kumar</Text>
+        <Text style={styles.footerText}>© 2026 ProxiFix. Trusted home services logistics.</Text>
+        <Text style={styles.footerCredit}>Engineered with Zero-Trust STRIDE Architecture</Text>
       </View>
 
-      <View style={{ height: 32 }} />
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
@@ -167,205 +182,226 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#effaf3",
+    backgroundColor: C.bgPage,
     padding: 16,
   },
   guestContainer: {
     flex: 1,
+    backgroundColor: C.bgPage,
     justifyContent: "center",
-    alignItems: "stretch",
+    padding: 16,
+  },
+  enterpriseHero: {
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.lg,
     padding: 20,
-    backgroundColor: "#effaf3",
-  },
-  heroCard: {
-    padding: 28,
-    backgroundColor: "#ffffff",
-    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "#e1e8e3",
-    shadowColor: "#14532d",
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.1,
-    shadowRadius: 44,
-    elevation: 4,
+    borderColor: C.border,
+    ...SHADOW.card,
   },
-  serviceIconBox: {
-    width: 54,
-    height: 54,
-    backgroundColor: "#e4f4e8",
-    borderRadius: 12,
+  securityPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: C.brandLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.xs,
+    gap: 5,
+    marginBottom: 8,
+  },
+  securityPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: C.brand,
+    letterSpacing: 0.5,
+  },
+  heroTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: C.slate900,
+    marginBottom: 4,
+  },
+  heroSubtitle: {
+    fontSize: 12,
+    color: C.slate600,
+    lineHeight: 18,
+  },
+  heroActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+  profileCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginBottom: 16,
+    ...SHADOW.card,
+  },
+  avatarPill: {
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.sm,
+    backgroundColor: C.brandLight,
     alignItems: "center",
     justifyContent: "center",
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: C.brand,
+  },
+  infoCol: {
+    marginLeft: 14,
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: C.slate900,
+  },
+  userEmail: {
+    fontSize: 12,
+    color: C.slate600,
+    marginTop: 1,
+  },
+  userMeta: {
+    fontSize: 11,
+    color: C.slate500,
+    marginTop: 2,
+  },
+  roleBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: C.brandLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.xs,
+    marginTop: 5,
+  },
+  roleBadgeText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: C.brand,
+  },
+  section: {
     marginBottom: 16,
   },
   eyebrow: {
-    color: "#08713d",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800",
-    letterSpacing: 1.2,
+    color: C.brand,
+    letterSpacing: 0.8,
     marginBottom: 6,
   },
-  heading: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#102a1c",
-    marginBottom: 8,
-  },
-  muted: {
-    color: "#61726a",
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 20,
-  },
-  heroActions: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
-  heroBtn: { flex: 1 },
-  btnPrimary: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 46,
-    paddingHorizontal: 20,
-    backgroundColor: "#075c31",
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  btnPrimaryHover: { backgroundColor: "#064a28" },
-  btnPrimaryText: { color: "#ffffff", fontWeight: "800", fontSize: 14 },
-  btnOutline: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 46,
-    paddingHorizontal: 20,
-    backgroundColor: "#ffffff",
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "#075c31",
-  },
-  btnOutlineText: { color: "#075c31", fontWeight: "800", fontSize: 14 },
-  // Profile card — .worker-card style
-  profileCard: {
-    flexDirection: "row",
-    gap: 16,
-    padding: 22,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "rgba(151,190,160,0.5)",
-    borderRadius: 16,
-    marginBottom: 20,
-    shadowColor: "#11423620",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 1,
-    shadowRadius: 30,
-    elevation: 3,
-  },
-  workerAvatar: {
-    flexShrink: 0,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#ddf2e4",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  workerAvatarText: {
-    color: "#075c31",
-    fontSize: 24,
-    fontWeight: "800",
-  },
-  infoCol: { flex: 1 },
-  workerName: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#102a1c",
-    marginBottom: 4,
-  },
-  workerMeta: {
-    fontSize: 13,
-    color: "#61726a",
-    marginBottom: 2,
-  },
-  // .status-approved
-  statusBadge: {
-    alignSelf: "flex-start",
-    marginTop: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: "#ddf2e4",
-    borderRadius: 999,
-  },
-  statusBadgeText: {
-    color: "#076332",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  section: { marginBottom: 20 },
-  // menu items — .dashboard-hover-card equivalent
   menuItem: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 14,
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: C.bgCard,
+    borderRadius: RADIUS.md,
+    padding: 12,
     borderWidth: 1,
-    borderColor: "rgba(151,190,160,0.5)",
+    borderColor: C.border,
     marginBottom: 8,
-    shadowColor: "#11423620",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 1,
-    shadowRadius: 30,
-    elevation: 2,
+    ...SHADOW.card,
   },
   menuItemHover: {
-    borderColor: "#78ad87",
-    shadowColor: "#114236",
-    shadowOffset: { width: 0, height: 22 },
-    shadowOpacity: 0.15,
-    shadowRadius: 38,
-    elevation: 5,
+    backgroundColor: C.slate50,
   },
-  menuContent: { marginLeft: 12, flex: 1 },
-  menuTitle: { fontSize: 14, fontWeight: "700", color: "#102a1c" },
-  menuSubtitle: { fontSize: 12, color: "#61726a", marginTop: 2 },
-  // .btn-danger
+  menuIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.xs,
+    backgroundColor: C.brandLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuContent: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  menuTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: C.slate900,
+  },
+  menuSubtitle: {
+    fontSize: 11,
+    color: C.slate500,
+    marginTop: 1,
+  },
+  statusLivePill: {
+    backgroundColor: "#dcfce7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.xs,
+  },
+  statusLiveText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#15803d",
+  },
   logoutBtn: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#dba2a2",
-    borderRadius: 9,
-    padding: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    marginTop: 8,
+    backgroundColor: "#fef2f2",
+    borderRadius: RADIUS.sm,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    gap: 6,
+    marginTop: 4,
   },
   logoutBtnHover: {
-    backgroundColor: "#b42318",
-    borderColor: "#b42318",
+    backgroundColor: "#fee2e2",
   },
   logoutBtnText: {
-    color: "#a61b1b",
+    fontSize: 12,
     fontWeight: "700",
-    fontSize: 14,
+    color: "#b91c1c",
   },
-  // .site-footer
   footer: {
-    marginTop: 32,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    backgroundColor: "#10291a",
-    borderRadius: 12,
     alignItems: "center",
+    paddingVertical: 20,
   },
   footerText: {
-    color: "#d6e5d8",
-    textAlign: "center",
-    fontSize: 12,
+    fontSize: 11,
+    color: C.slate500,
   },
   footerCredit: {
-    marginTop: 4,
-    color: "#a9cbb0",
-    fontSize: 11,
-    textAlign: "center",
+    fontSize: 10,
+    color: C.slate400,
+    marginTop: 2,
+  },
+  btnPrimary: {
+    flex: 1,
+    backgroundColor: C.brand,
+    borderRadius: RADIUS.sm,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  btnPrimaryText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  btnOutline: {
+    flex: 1,
+    backgroundColor: "transparent",
+    borderRadius: RADIUS.sm,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: C.brand,
+  },
+  btnOutlineText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: C.brand,
   },
 });
