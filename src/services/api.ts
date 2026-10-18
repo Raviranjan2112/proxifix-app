@@ -9,7 +9,7 @@ import Constants from "expo-constants";
 const debuggerHost =
   Constants.expoConfig?.hostUri?.split(":")[0] ||
   Constants.manifest2?.extra?.expoGo?.debuggerHost?.split(":")[0] ||
-  "192.168.1.7";
+  "192.168.1.76";
 
 export const API_BASE_URL = `http://${debuggerHost}:4000/api`;
 
